@@ -1,0 +1,70 @@
+on:
+  pull_request:
+
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Cache NuGet
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj') }}
+          restore-keys: |
+            ${{ runner.os }}-nuget-
+
+      - name: Restore
+        run: dotnet restore
+
+      - name: Build
+        run: dotnet build --no-restore --configuration Release
+
+      - name: Test with coverage
+        run: |
+          dotnet test \
+            --no-build \
+            --configuration Release \
+            --collect:"XPlat Code Coverage" \
+            --results-directory ./coverage
+
+      - name: Install ReportGenerator
+        run: dotnet tool install -g dotnet-reportgenerator-globaltool
+
+      - name: Generate coverage report
+        run: |
+          reportgenerator \
+            -reports:coverage/**/coverage.cobertura.xml \
+            -targetdir:coverage-report \
+            -reporttypes:MarkdownSummary
+
+      - name: Extract coverage
+        id: coverage
+        run: |
+          COVERAGE=$(grep -oP 'Line coverage: \K[0-9.]+' coverage-report/Summary.md)
+          echo "coverage=$COVERAGE" >> $GITHUB_OUTPUT
+
+      - name: Comment PR
+        uses: marocchino/sticky-pull-request-comment@v2
+        with:
+          message: |
+            ## Coverage Report
+            Coverage: **${{ steps.coverage.outputs.coverage }}%**
+
+            $(cat coverage-report/Summary.md)
+
+      - name: Check coverage threshold
+        run: |
+          COVERAGE=${{ steps.coverage.outputs.coverage }}
+          echo "Coverage is $COVERAGE%"
+
+          awk "BEGIN {exit !($COVERAGE >= 90)}" || \
+          (echo "Coverage is below 90%" && exit 1)
