@@ -23,9 +23,6 @@ public class Vector
 
     public static bool operator ==(Vector a, Vector b)
     {
-        if (ReferenceEquals(a, b))
-            return true;
-
         return a.Equals(b);
     }
 
