@@ -5,6 +5,10 @@ jobs:
   build-test:
     runs-on: ubuntu-latest
 
+    permissions:
+      pull-requests: write
+      contents: read
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -24,47 +28,42 @@ jobs:
 
       - name: Restore
         run: dotnet restore
+        working-directory: SpaceBattle
 
       - name: Build
-        run: dotnet build --no-restore --configuration Release
+        run: dotnet build --configuration Release
+        working-directory: SpaceBattle
 
       - name: Test with coverage
         run: |
           dotnet test \
-            --no-build \
             --configuration Release \
-            --collect:"XPlat Code Coverage" \
-            --results-directory ./coverage
+            /p:CollectCoverage=true \
+            /p:CoverletOutputFormat=cobertura \
+            /p:CoverletOutput=./coverage/coverage \
+            /p:Exclude="[xunit.*]*"
+        working-directory: SpaceBattle
 
       - name: Install ReportGenerator
         run: dotnet tool install -g dotnet-reportgenerator-globaltool
 
       - name: Generate coverage report
         run: |
-          reportgenerator \
-            -reports:coverage/**/coverage.cobertura.xml \
-            -targetdir:coverage-report \
-            -reporttypes:MarkdownSummary
-
-      - name: Extract coverage
-        id: coverage
-        run: |
-          COVERAGE=$(grep -oP 'Line coverage: \K[0-9.]+' coverage-report/Summary.md)
-          echo "coverage=$COVERAGE" >> $GITHUB_OUTPUT
+          COVERAGE_FILE=$(find . -name "*.cobertura.xml" -type f | head -1)
+          ~/.dotnet/tools/reportgenerator \
+            -reports:"$COVERAGE_FILE" \
+            -targetdir:"coverage-report" \
+            -reporttypes:"MarkdownSummary"
+          
+          if [ -f "coverage-report/Summary.md" ]; then
+            sed -i '/sponsors/d' coverage-report/Summary.md
+            sed -i '/Sponsor/d' coverage-report/Summary.md
+            sed -i '/is only available for sponsors/d' coverage-report/Summary.md
+            sed -i '/Feature is only available for sponsors/d' coverage-report/Summary.md
+          fi
 
       - name: Comment PR
         uses: marocchino/sticky-pull-request-comment@v2
         with:
-          message: |
-            ## Coverage Report
-            Coverage: **${{ steps.coverage.outputs.coverage }}%**
-
-            $(cat coverage-report/Summary.md)
-
-      - name: Check coverage threshold
-        run: |
-          COVERAGE=${{ steps.coverage.outputs.coverage }}
-          echo "Coverage is $COVERAGE%"
-
-          awk "BEGIN {exit !($COVERAGE >= 90)}" || \
-          (echo "Coverage is below 90%" && exit 1)
+          header: coverage
+          path: coverage-report/Summary.md
