@@ -80,6 +80,13 @@ public class VectorTest
     }
 
     [Fact]
+    public void Equals_OtherType_ReturnsFalse()
+    {
+        var v = new Vector([1, 2]);
+        Assert.False(v.Equals("vector"));
+    }
+
+    [Fact]
     public void GetHashCode_EqualVectors_ReturnsSameHashCode()
     {
         var vector1 = new Vector([1, 2, 3]);

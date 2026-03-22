@@ -1,13 +1,8 @@
 namespace SpaceBattle.Lib;
 
-public class Vector
+public class Vector(int[] coord)
 {
-    private readonly int[] coordinates;
-
-    public Vector(int[] coord)
-    {
-        coordinates = coord;
-    }
+    private readonly int[] coordinates = coord;
 
     public int Dimension => coordinates.Length;
 
