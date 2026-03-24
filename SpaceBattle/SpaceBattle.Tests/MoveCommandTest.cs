@@ -6,7 +6,7 @@ namespace SpaceBattle.Tests;
 public class MoveCommandTest
 {
     [Fact]
-    public void MoveShouldCorrentChangePosition()
+    public void MoveShouldCorreсtChangePosition()
     {
         var moving = new Mock<IMovingObject>();
 
@@ -21,7 +21,7 @@ public class MoveCommandTest
     }
 
     [Fact]
-    public void MoveShouldCannotReadPosition()
+    public void MoveCannotReadPosition()
     {
         var moving = new Mock<IMovingObject>();
 
