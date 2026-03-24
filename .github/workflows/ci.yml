@@ -1,0 +1,69 @@
+on:
+  pull_request:
+
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+
+    permissions:
+      pull-requests: write
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Cache NuGet
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj') }}
+          restore-keys: |
+            ${{ runner.os }}-nuget-
+
+      - name: Restore
+        run: dotnet restore
+        working-directory: SpaceBattle
+
+      - name: Build
+        run: dotnet build --configuration Release
+        working-directory: SpaceBattle
+
+      - name: Test with coverage
+        run: |
+          dotnet test \
+            --configuration Release \
+            /p:CollectCoverage=true \
+            /p:CoverletOutputFormat=cobertura \
+            /p:CoverletOutput=./coverage/coverage \
+            /p:Exclude="[xunit.*]*"
+        working-directory: SpaceBattle
+
+      - name: Install ReportGenerator
+        run: dotnet tool install -g dotnet-reportgenerator-globaltool
+
+      - name: Generate coverage report
+        run: |
+          COVERAGE_FILE=$(find . -name "*.cobertura.xml" -type f | head -1)
+          ~/.dotnet/tools/reportgenerator \
+            -reports:"$COVERAGE_FILE" \
+            -targetdir:"coverage-report" \
+            -reporttypes:"MarkdownSummary"
+          
+          if [ -f "coverage-report/Summary.md" ]; then
+            sed -i '/sponsors/d' coverage-report/Summary.md
+            sed -i '/Sponsor/d' coverage-report/Summary.md
+            sed -i '/is only available for sponsors/d' coverage-report/Summary.md
+            sed -i '/Feature is only available for sponsors/d' coverage-report/Summary.md
+          fi
+
+      - name: Comment PR
+        uses: marocchino/sticky-pull-request-comment@v2
+        with:
+          header: coverage
+          path: coverage-report/Summary.md
