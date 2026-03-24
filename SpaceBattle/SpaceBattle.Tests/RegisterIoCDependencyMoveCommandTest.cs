@@ -1,11 +1,17 @@
 using SpaceBattle.Lib;
 using Moq;
 using App;
+using App.Scopes;
 
 namespace SpaceBattle.Tests;
 
 public class RegisterIoCDependencyMoveCommandTest
 {
+    public RegisterIoCDependencyMoveCommandTest()
+    {
+        new InitCommand().Execute();
+    }
+
     [Fact]
     public void ShouldResolveMoveCommand()
     {
@@ -21,10 +27,10 @@ public class RegisterIoCDependencyMoveCommandTest
 
         new RegisterIoCDependencyMoveCommand().Execute();
 
-        // var cmd = Ioc.Resolve<ICommand>("Commands.Move", moving.Object);
+        var cmd = Ioc.Resolve<ICommand>("Commands.Move", moving.Object);
 
-        // cmd.Execute();
+        cmd.Execute();
 
-        // Assert.Equal(new Vector([1, 1]), moving.Object.Position);
+        Assert.Equal(new Vector([1, 1]), moving.Object.Position);
     }
 }
