@@ -10,6 +10,8 @@ public class RegisterIoCDependencyMoveCommandTest
     public RegisterIoCDependencyMoveCommandTest()
     {
         new InitCommand().Execute();
+        var iocScope = Ioc.Resolve<object>("IoC.Scope.Create");
+        Ioc.Resolve<ICommand>("IoC.Scope.Current.Set", iocScope).Execute();
     }
 
     [Fact]
