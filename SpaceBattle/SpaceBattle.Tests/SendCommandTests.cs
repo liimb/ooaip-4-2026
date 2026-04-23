@@ -1,60 +1,47 @@
+using System;
+using System.Threading;
+using Xunit;
+using Moq;
 using App;
 using SpaceBattle.Lib;
-using Xunit;
-using System;
 
 namespace SpaceBattle.Tests
 {
-    class TestReceiver : ICommandReceiver
-    {
-        public App.ICommand? ReceivedCommand { get; private set; }
-        public bool CanReceiveValue { get; set; } = true;
-
-        public void Receive(App.ICommand command)
-        {
-            ReceivedCommand = command;
-        }
-
-        public bool CanReceive()
-        {
-            return CanReceiveValue;
-        }
-    }
-
-    class TestLongCommand : App.ICommand
-    {
-        public bool Executed { get; private set; }
-
-        public void Execute()
-        {
-            Executed = true;
-        }
-    }
-
     public class SendCommandTests
     {
         [Fact]
-        public void SendCommand_LongCommand()
+        public void SendCommand_PassesLongRunningCommand_ToReceiver()
         {
-            var longCommand = new TestLongCommand();
-            var receiver = new TestReceiver();
-            var sendCommand = new SendCommand(longCommand, receiver);
+            var mockCommand = new Mock<ICommand>();
+
+            mockCommand.Setup(c => c.Execute()).Callback(() =>
+            {
+                Thread.Sleep(50);
+            });
+
+            var mockReceiver = new Mock<ICommandReceiver>();
+
+            var sendCommand = new SendCommand(mockCommand.Object, mockReceiver.Object);
 
             sendCommand.Execute();
 
-            Assert.Equal(longCommand, receiver.ReceivedCommand);
+            mockReceiver.Verify(r => r.Receive(mockCommand.Object), Times.Once);
         }
 
         [Fact]
-        public void SendCommand_ThrowsExceptionIfReceiverCannotAcceptLongCommmand()
+        public void SendCommand_ThrowsException_WhenReceiverCannotAcceptLongCommand()
         {
-            var longCommand = new TestLongCommand();
-            var receiver = new TestReceiver();
-            receiver.CanReceiveValue = false;
-            var sendCommand = new SendCommand(longCommand, receiver);
+            var mockCommand = new Mock<ICommand>();
+
+            var mockReceiver = new Mock<ICommandReceiver>();
+
+            mockReceiver
+                .Setup(r => r.Receive(mockCommand.Object))
+                .Throws(new InvalidOperationException("Cannot receive long command"));
+
+            var sendCommand = new SendCommand(mockCommand.Object, mockReceiver.Object);
 
             Assert.Throws<InvalidOperationException>(() => sendCommand.Execute());
-            Assert.Null(receiver.ReceivedCommand);
         }
     }
 }

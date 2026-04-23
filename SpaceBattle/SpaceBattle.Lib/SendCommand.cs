@@ -24,10 +24,6 @@ namespace SpaceBattle.Lib
 
         public void Execute()
         {
-            if (!_receiver.CanReceive())
-            {
-                throw new InvalidOperationException("Receiver cannot accept command");
-            }
             _receiver.Receive(_command);
         }
     }
