@@ -45,7 +45,7 @@ namespace SpaceBattle.Tests
         [Fact]
         public void RegisterDependencySendCommand_WorksInMultipleThreads()
         {
-            Init(); 
+            Init();
 
             var cmd = new Mock<App.ICommand>();
             var receiver = new Mock<ICommandReceiver>();
