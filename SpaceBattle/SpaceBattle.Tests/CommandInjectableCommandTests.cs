@@ -6,26 +6,26 @@ using System;
 
 namespace SpaceBattle.Tests
 {
-	public class CommandInjectableCommandTests
-	{
-		[Fact]
-		public void CommandInjectableCommand_ExecutesInjectedCommand()
-		{
-			var mockCommand = new Mock<ICommand>();
-			var injectableCommand = new CommandInjectableCommand();
+    public class CommandInjectableCommandTests
+    {
+        [Fact]
+        public void CommandInjectableCommand_ExecutesInjectedCommand()
+        {
+            var mockCommand = new Mock<ICommand>();
+            var injectableCommand = new CommandInjectableCommand();
 
-			injectableCommand.Inject(mockCommand.Object);
-			injectableCommand.Execute();
+            injectableCommand.Inject(mockCommand.Object);
+            injectableCommand.Execute();
 
-			mockCommand.Verify(c => c.Execute(), Times.Once);
-		}
+            mockCommand.Verify(c => c.Execute(), Times.Once);
+        }
 
-		[Fact]
-		public void CommandInjectableCommand_ThrowsException_WhenNoCommandInjected()
-		{
-			var injectableCommand = new CommandInjectableCommand();
+        [Fact]
+        public void CommandInjectableCommand_ThrowsException_WhenNoCommandInjected()
+        {
+            var injectableCommand = new CommandInjectableCommand();
 
-			Assert.Throws<InvalidOperationException>(() => injectableCommand.Execute());
-		}
-	}
+            Assert.Throws<InvalidOperationException>(() => injectableCommand.Execute());
+        }
+    }
 }
