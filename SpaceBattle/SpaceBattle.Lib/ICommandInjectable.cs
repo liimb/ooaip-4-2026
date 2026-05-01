@@ -1,3 +1,5 @@
+using App;
+
 namespace SpaceBattle.Lib
 {
     public interface ICommandInjectable
