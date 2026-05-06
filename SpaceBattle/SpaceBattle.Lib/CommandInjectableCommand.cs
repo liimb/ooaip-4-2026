@@ -14,11 +14,7 @@ namespace SpaceBattle.Lib
 
         public void Execute()
         {
-            if (_command == null)
-            {
-                throw new InvalidOperationException("Command not injected");
-            }
-            _command.Execute();
+            _command!.Execute();
         }
     }
 }
