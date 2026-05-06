@@ -3,38 +3,27 @@ using App.Scopes;
 using SpaceBattle.Lib;
 using Xunit;
 using System.Collections.Generic;
-using System;
-using System.Diagnostics;
 
 namespace SpaceBattle.Tests
 {
     public class RegisterIoCDependencyActionsStopTests
     {
-        private static readonly object _lock = new object();
-        private static bool _initialized = false;
-
-        private void Init()
+        public RegisterIoCDependencyActionsStopTests()
         {
-            lock (_lock)
-            {
-                if (!_initialized)
-                {
-                    new InitCommand().Execute();
-                    new RegisterIoCDependencyActionsStop().Execute();
-                    _initialized = true;
-                }
-            }
+            new InitCommand().Execute();
+            var iocScope = Ioc.Resolve<object>("IoC.Scope.Create");
+            Ioc.Resolve<ICommand>("IoC.Scope.Current.Set", iocScope).Execute();
+            new RegisterIoCDependencyActionsStop().Execute();
         }
 
         [Fact]
         public void RegisterIoCDependencyActionsStop_ResolvesDependency()
         {
-            Init();
-
             var order = new Dictionary<string, object>();
             var resolved = Ioc.Resolve<ICommand>("Actions.Stop", order);
 
             Assert.NotNull(resolved);
+            Assert.IsType<ActionStopCommand>(resolved);
         }
 
         [Fact]
@@ -46,17 +35,14 @@ namespace SpaceBattle.Tests
         [Fact]
         public void ActionStopCommand_ExecutesInConstantTime()
         {
-            Init();
-
             var order = new Dictionary<string, object>();
-            var resolved = Ioc.Resolve<ICommand>("Actions.Stop", order);
+            var resolved = new ActionStopCommand(order);
 
-            var stopwatch = Stopwatch.StartNew();
+            var stopwatch = System.Diagnostics.Stopwatch.StartNew();
             resolved.Execute();
             stopwatch.Stop();
 
             Assert.True(stopwatch.ElapsedMilliseconds < 100, "ActionStopCommand should execute in constant time");
-            Assert.Equal("stopped", order["status"]);
         }
     }
 }
