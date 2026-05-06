@@ -1,8 +1,8 @@
 using App;
+using App.Scopes;
 using SpaceBattle.Lib;
 using Moq;
 using Xunit;
-using App.Scopes;
 
 namespace SpaceBattle.Tests
 {
@@ -11,6 +11,8 @@ namespace SpaceBattle.Tests
         public RegisterIoCDependencySendCommandTests()
         {
             new InitCommand().Execute();
+            var iocScope = Ioc.Resolve<object>("IoC.Scope.Create");
+            Ioc.Resolve<ICommand>("IoC.Scope.Current.Set", iocScope).Execute();
             new RegisterIoCDependencySendCommand().Execute();
         }
 
