@@ -14,7 +14,7 @@ namespace SpaceBattle.Lib
 
         public void Execute()
         {
-            _order["status"] = "started";
+
         }
     }
 }
