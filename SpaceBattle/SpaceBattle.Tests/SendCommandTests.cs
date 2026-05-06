@@ -1,5 +1,4 @@
 using System;
-using System.Threading;
 using Xunit;
 using Moq;
 using App;
@@ -13,12 +12,6 @@ namespace SpaceBattle.Tests
         public void SendCommand_PassesLongRunningCommand_ToReceiver()
         {
             var mockCommand = new Mock<ICommand>();
-
-            mockCommand.Setup(c => c.Execute()).Callback(() =>
-            {
-                Thread.Sleep(50);
-            });
-
             var mockReceiver = new Mock<ICommandReceiver>();
 
             var sendCommand = new SendCommand(mockCommand.Object, mockReceiver.Object);
@@ -31,8 +24,8 @@ namespace SpaceBattle.Tests
         [Fact]
         public void SendCommand_ThrowsException_WhenReceiverCannotAcceptLongCommand()
         {
-            var mockCommand = new Mock<ICommand>();
 
+            var mockCommand = new Mock<ICommand>();
             var mockReceiver = new Mock<ICommandReceiver>();
 
             mockReceiver
