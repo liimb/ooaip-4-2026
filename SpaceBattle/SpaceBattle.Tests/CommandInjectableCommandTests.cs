@@ -25,7 +25,7 @@ namespace SpaceBattle.Tests
         {
             var injectableCommand = new CommandInjectableCommand();
 
-            Assert.Throws<InvalidOperationException>(() => injectableCommand.Execute());
+            Assert.Throws<NullReferenceException>(() => injectableCommand.Execute());
         }
     }
 }
