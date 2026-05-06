@@ -34,6 +34,8 @@ public class CheckAuthorizationCommandTest
     {
         var tree = new PrefixTree<string, bool>();
         tree.Add(["Player1", "Ship1", "Shoot"], true);
+        tree.Add(["Player1", "Ship2", "Shoot"], true);
+        tree.Add(["Player1", "Ship999", "Move"], true);
 
         Ioc.Resolve<ICommand>("IoC.Register", "Authorization.Tree", (object[] args) => tree).Execute();
 
