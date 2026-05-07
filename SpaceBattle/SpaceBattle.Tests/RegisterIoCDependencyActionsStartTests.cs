@@ -1,6 +1,7 @@
 using App;
 using App.Scopes;
 using SpaceBattle.Lib;
+using Moq;
 using Xunit;
 using System.Collections.Generic;
 
@@ -17,13 +18,31 @@ namespace SpaceBattle.Tests
         }
 
         [Fact]
-        public void RegisterIoCDependencyActionsStart_ResolvesActionStartCommand()
+        public void RegisterIoCDependencyActionsStart_ResolvesDependency()
+        {
+            var mockCommand = new Mock<ICommand>();
+            var order = new Dictionary<string, object>
+            {
+                { "command", mockCommand.Object }
+            };
+
+            var resolved = Ioc.Resolve<ICommand>("Actions.Start", order);
+
+            Assert.NotNull(resolved);
+            Assert.IsType<CommandInjectableCommand>(resolved);
+
+            resolved.Execute();
+            mockCommand.Verify(c => c.Execute(), Times.Once);
+        }
+
+        [Fact]
+        public void RegisterIoCDependencyActionsStart_ResolvesWithoutCommand()
         {
             var order = new Dictionary<string, object>();
             var resolved = Ioc.Resolve<ICommand>("Actions.Start", order);
 
             Assert.NotNull(resolved);
-            Assert.IsType<StartActionCommand>(resolved);
+            Assert.IsType<CommandInjectableCommand>(resolved);
         }
     }
 }
