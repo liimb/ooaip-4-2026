@@ -176,4 +176,81 @@ public class GameTests
 
         Assert.Throws<ArgumentNullException>(() => game.Shoot(null!));
     }
+
+    [Fact]
+    public void Game_Update_Should_Handle_Collisions_When_Collisions_Exist()
+    {
+        var gameId = Guid.NewGuid();
+        var commandReceiverMock = new Mock<ICommandReceiver>();
+        var game = new Game(gameId, commandReceiverMock.Object);
+
+        var torpedoId = Guid.NewGuid();
+        var torpedoesList = new List<Guid> { torpedoId };
+        var collision = new { TorpedoId = torpedoId, ShipId = Guid.NewGuid() };
+        var collisionsList = new List<object> { collision };
+
+        var handleCollisionMock = new Mock<ICommand>();
+        handleCollisionMock.Setup(c => c.Execute()).Verifiable();
+
+        Ioc.Resolve<ICommand>("IoC.Register", "Game.GetTorpedoes", (object[] args) => torpedoesList).Execute();
+        Ioc.Resolve<ICommand>("IoC.Register", "Game.CheckCollisions", (object[] args) => collisionsList).Execute();
+        Ioc.Resolve<ICommand>("IoC.Register", "Game.HandleCollision", (object[] args) => handleCollisionMock.Object).Execute();
+        Ioc.Resolve<ICommand>("IoC.Register", "MoveCommand", (object[] args) => new Mock<ICommand>().Object).Execute();
+
+        game.Update();
+
+        handleCollisionMock.Verify(c => c.Execute(), Times.Once);
+    }
+
+    [Fact]
+    public void Game_AddCommand_Should_Throw_When_Command_Is_Null()
+    {
+        var gameId = Guid.NewGuid();
+        var commandReceiverMock = new Mock<ICommandReceiver>();
+        var game = new Game(gameId, commandReceiverMock.Object);
+
+        Assert.Throws<ArgumentNullException>(() => game.AddCommand(null!));
+    }
+
+    [Fact]
+    public void Game_Constructor_Should_Throw_When_Receiver_Is_Null()
+    {
+        Assert.Throws<ArgumentNullException>(() => new Game(Guid.NewGuid(), null!));
+    }
+
+    [Fact]
+    public void Game_GetState_Should_Return_State_From_IoC()
+    {
+        var gameId = Guid.NewGuid();
+        var commandReceiverMock = new Mock<ICommandReceiver>();
+        var game = new Game(gameId, commandReceiverMock.Object);
+
+        var expectedState = new { GameId = gameId, Status = "Running", Score = 100 };
+        Ioc.Resolve<ICommand>("IoC.Register", "Game.State.Get", (object[] args) => expectedState).Execute();
+
+        var state = game.GetState();
+
+        Assert.Equal(expectedState, state);
+    }
+
+    [Fact]
+    public void Game_Update_Should_Continue_On_Command_Exception()
+    {
+        var gameId = Guid.NewGuid();
+        var commandReceiverMock = new Mock<ICommandReceiver>();
+        var game = new Game(gameId, commandReceiverMock.Object);
+
+        var failingCommand = new Mock<ICommand>();
+        failingCommand.Setup(c => c.Execute()).Throws(new Exception("Test error"));
+
+        game.AddCommand(failingCommand.Object);
+
+        Ioc.Resolve<ICommand>("IoC.Register", "Game.GetTorpedoes", (object[] args) => new List<Guid>()).Execute();
+        Ioc.Resolve<ICommand>("IoC.Register", "Game.CheckCollisions", (object[] args) => new List<object>()).Execute();
+        Ioc.Resolve<ICommand>("IoC.Register", "Game.HandleCollision", (object[] args) => new Mock<ICommand>().Object).Execute();
+
+        var exception = Record.Exception(() => game.Update());
+
+        Assert.Null(exception); 
+    }
 }
