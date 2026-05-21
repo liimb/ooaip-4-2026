@@ -251,6 +251,6 @@ public class GameTests
 
         var exception = Record.Exception(() => game.Update());
 
-        Assert.Null(exception); 
+        Assert.Null(exception);
     }
 }
