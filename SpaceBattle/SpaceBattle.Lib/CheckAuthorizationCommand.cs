@@ -2,17 +2,22 @@ using App;
 
 namespace SpaceBattle.Lib;
 
-public class CheckAuthorizationCommand(params string[] path) : ICommand
+public class CheckAuthorizationCommand : ICommand
 {
-    private readonly string[] _path = path;
+    private readonly IPrefixTree<string, bool> _tree;
+    private readonly string[] _path;
+
+    public CheckAuthorizationCommand(IPrefixTree<string, bool> tree, params string[] path)
+    {
+        _tree = tree;
+        _path = path;
+    }
 
     public void Execute()
     {
-        var tree = Ioc.Resolve<PrefixTree<string, bool>>("Authorization.Tree");
+        var (found, value) = _tree.TryGet(_path);
 
-        var (Found, Value) = tree.TryGet(_path);
-
-        if (!Found || !Value)
+        if (!found || !value)
         {
             throw new UnauthorizedAccessException($"Access denied for path: {string.Join(" -> ", _path)}");
         }
