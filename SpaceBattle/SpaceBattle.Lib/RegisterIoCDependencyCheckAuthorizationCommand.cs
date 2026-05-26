@@ -9,11 +9,11 @@ public class RegisterIoCDependencyCheckAuthorizationCommand : ICommand
         Ioc.Resolve<ICommand>("IoC.Register", "Authorization.Check", (object[] args) =>
         {
             var tree = Ioc.Resolve<IPrefixTree<string, bool>>("Authorization.Tree");
-            
+
             var path = args.Cast<string>().ToArray();
-            
+
             return new CheckAuthorizationCommand(tree, path);
-            
+
         }).Execute();
     }
 }
