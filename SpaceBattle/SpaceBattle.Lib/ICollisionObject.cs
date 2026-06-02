@@ -5,7 +5,7 @@ namespace SpaceBattle.Lib;
 
 public interface ICollisionObject
 {
-    string Form { get; } 
+    string Form { get; }
     IVector Position { get; }
     IVector Velocity { get; }
 }
