@@ -1,6 +1,6 @@
 namespace SpaceBattle.Lib;
 
-public class PrefixTree<TKey, TValue> where TKey : notnull
+public class PrefixTree<TKey, TValue> : IPrefixTree<TKey, TValue> where TKey : notnull
 {
     private readonly Dictionary<TKey, PrefixTree<TKey, TValue>> _children = [];
     public TValue? Value { get; set; }
