@@ -1,25 +1,56 @@
-using SpaceBattle.Lib;
 using App;
 using App.Scopes;
+using SpaceBattle.Lib;
+using Moq;
+using Xunit;
+using System.Collections.Generic;
 
-namespace SpaceBattle.Tests;
-
-public class RegisterIoCDependencyGameCommandTests
+namespace SpaceBattle.Tests
 {
-    public RegisterIoCDependencyGameCommandTests()
+    public class RegisterIoCDependencyGameTests
     {
-        new InitCommand().Execute();
-        var iocScope = Ioc.Resolve<object>("IoC.Scope.Create");
-        Ioc.Resolve<ICommand>("IoC.Scope.Current.Set", iocScope).Execute();
-    }
+        [Fact]
+        public void RegisterIoCDependencyGameCommand_RegistersAllDependencies()
+        {
+            new InitCommand().Execute();
 
-    [Fact]
-    public void Execute_ShouldRegisterDependenciesWithoutErrors()
-    {
-        var registerCommand = new RegisterIoCDependencyGameCommand();
+            var iocScope = Ioc.Resolve<object>("IoC.Scope.Create");
+            Ioc.Resolve<ICommand>(
+                "IoC.Scope.Current.Set",
+                iocScope
+            ).Execute();
 
-        var exception = Record.Exception(() => registerCommand.Execute());
+            var testScope = new object();
 
-        Assert.Null(exception);
+            Ioc.Resolve<ICommand>(
+                "IoC.Register",
+                "Scopes.Create",
+                (Func<object[], object>)(_ => testScope)
+            ).Execute();
+
+            new RegisterIoCDependencyGameCommand().Execute();
+
+            var canContinue = Ioc.Resolve<bool>(
+                "Game.Scheduler.CanContinue"
+            );
+
+            Assert.False(canContinue);
+
+            var take = Ioc.Resolve<object>(
+                "Game.Scheduler.Take"
+            );
+
+            Assert.Null(take);
+
+            var gameId = Guid.NewGuid();
+
+            var game = Ioc.Resolve<Game>(
+                "Game.Create",
+                gameId
+            );
+
+            Assert.NotNull(game);
+            Assert.IsType<Game>(game);
+        }
     }
 }

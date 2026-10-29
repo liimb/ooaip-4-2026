@@ -1,7 +1,9 @@
-using SpaceBattle.Lib;
-using Moq;
+using System;
 using App;
 using App.Scopes;
+using Moq;
+using SpaceBattle.Lib;
+using Xunit;
 
 namespace SpaceBattle.Tests;
 
@@ -10,8 +12,11 @@ public class RegisterIoCDependencyRepositoryCommandTest
     public RegisterIoCDependencyRepositoryCommandTest()
     {
         new InitCommand().Execute();
+
         var iocScope = Ioc.Resolve<object>("IoC.Scope.Create");
         Ioc.Resolve<ICommand>("IoC.Scope.Current.Set", iocScope).Execute();
+
+        new RegisterIoCDependencyRepositoryCommand().Execute();
     }
 
     [Fact]
@@ -20,15 +25,18 @@ public class RegisterIoCDependencyRepositoryCommandTest
         var id = Guid.NewGuid();
         var expectedObj = new object();
 
-        Ioc.Resolve<ICommand>("IoC.Register", "Game.Objects.Find", (object[] args) =>
-        {
-            if ((Guid)args[0] == id) return expectedObj;
-            throw new Exception();
-        }).Execute();
-
-        new RegisterIoCDependencyRepositoryCommand().Execute();
+        Ioc.Resolve<ICommand>(
+            "IoC.Register",
+            "Game.Objects.Find",
+            (Func<object[], object>)(args =>
+            {
+                Assert.Equal(id, args[0]);
+                return expectedObj;
+            })
+        ).Execute();
 
         var result = Ioc.Resolve<object>("Game.Registry.Get", id);
+
         Assert.Same(expectedObj, result);
     }
 
@@ -39,14 +47,16 @@ public class RegisterIoCDependencyRepositoryCommandTest
         var obj = new object();
         var mockCommand = new Mock<ICommand>();
 
-        Ioc.Resolve<ICommand>("IoC.Register", "Game.Objects.Store", (object[] args) =>
-        {
-            return mockCommand.Object;
-        }).Execute();
-
-        new RegisterIoCDependencyRepositoryCommand().Execute();
+        Ioc.Resolve<ICommand>(
+            "IoC.Register",
+            "Game.Objects.Store",
+            (Func<object[], object>)(_ => mockCommand.Object)
+        ).Execute();
 
         var cmd = Ioc.Resolve<ICommand>("Game.Registry.Create", id, obj);
+
+        Assert.Same(mockCommand.Object, cmd);
+
         cmd.Execute();
 
         mockCommand.Verify(x => x.Execute(), Times.Once);
@@ -58,15 +68,20 @@ public class RegisterIoCDependencyRepositoryCommandTest
         var id = Guid.NewGuid();
         var mockRemoveCommand = new Mock<ICommand>();
 
-        Ioc.Resolve<ICommand>("IoC.Register", "Game.Objects.Remove", (object[] args) =>
-        {
-            if ((Guid)args[0] == id) return mockRemoveCommand.Object;
-            throw new Exception("Wrong ID passed to Remove strategy");
-        }).Execute();
-
-        new RegisterIoCDependencyRepositoryCommand().Execute();
+        Ioc.Resolve<ICommand>(
+            "IoC.Register",
+            "Game.Objects.Remove",
+            (Func<object[], object>)(args =>
+            {
+                Assert.Equal(id, args[0]);
+                return mockRemoveCommand.Object;
+            })
+        ).Execute();
 
         var cmd = Ioc.Resolve<ICommand>("Game.Registry.Delete", id);
+
+        Assert.Same(mockRemoveCommand.Object, cmd);
+
         cmd.Execute();
 
         mockRemoveCommand.Verify(x => x.Execute(), Times.Once);
