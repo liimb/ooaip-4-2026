@@ -1,26 +1,47 @@
 using App;
+using Xunit;
 
-namespace SpaceBattle.Lib;
+namespace SpaceBattle.Tests;
 
-public class RegisterIoCDependencyGameCommand : ICommand
+public class RegisterIoCDependencyGameCommandTests
 {
-    public void Execute()
+    [Fact]
+    public void Execute_RegistersGameCreate_AndFactoryCreatesGame()
     {
-        Ioc.Resolve<ICommand>("IoC.Register", "Game.Create", (object[] args) =>
-        {
-            var gameId = (Guid)args[0];
-            var scope = Ioc.Resolve<object>("Scopes.Create");
-            return new Game(gameId, scope);
-        }).Execute();
+        Ioc.Resolve<ICommand>(
+            "IoC.Register",
+            "Scopes.Create",
+            (Func<object[], object>)(_ => new object())
+        ).Execute();
 
-        Ioc.Resolve<ICommand>("IoC.Register", "Game.Scheduler.CanContinue", (object[] args) =>
-        {
-            return (object)false;
-        }).Execute();
+        var cmd = new RegisterIoCDependencyGameCommand();
+        cmd.Execute();
 
-        Ioc.Resolve<ICommand>("IoC.Register", "Game.Scheduler.Take", (Func<object[], object>)((object[] args) =>
-        {
-            return null!;
-        })).Execute();
+        var gameId = Guid.NewGuid();
+        var game = Ioc.Resolve<Game>("Game.Create", gameId);
+
+        Assert.NotNull(game);
+    }
+
+    [Fact]
+    public void Execute_RegistersSchedulerCanContinue_ReturnsFalse()
+    {
+        var cmd = new RegisterIoCDependencyGameCommand();
+        cmd.Execute();
+
+        var canContinue = Ioc.Resolve<object>("Game.Scheduler.CanContinue");
+
+        Assert.Equal(false, canContinue);
+    }
+
+    [Fact]
+    public void Execute_RegistersSchedulerTake_ReturnsNull()
+    {
+        var cmd = new RegisterIoCDependencyGameCommand();
+        cmd.Execute();
+
+        var take = Ioc.Resolve<object>("Game.Scheduler.Take");
+
+        Assert.Null(take);
     }
 }
