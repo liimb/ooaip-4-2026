@@ -1,12 +1,12 @@
+namespace SpaceBattle.Tests;
+
 using System;
 using System.Collections.Generic;
-using Moq;
-using Xunit;
 using App;
 using App.Scopes;
+using Moq;
 using SpaceBattle.Lib;
-
-namespace SpaceBattle.Tests;
+using Xunit;
 
 public class GameTests
 {
@@ -34,7 +34,8 @@ public class GameTests
 
         Ioc.Resolve<ICommand>("IoC.Register", "Game.Scheduler.CanContinue", (object[] args) => (object)canContinueSequence.Dequeue()).Execute();
 
-        var scheduledCommands = new Queue<ICommand>(new[] {
+        var scheduledCommands = new Queue<ICommand>(new[]
+        {
             normalCommandMock.Object,
             exceptionCommandMock.Object
         });
@@ -43,7 +44,8 @@ public class GameTests
         var thrownException = new Exception("Test exception");
         exceptionCommandMock.Setup(c => c.Execute()).Throws(thrownException);
 
-        Ioc.Resolve<ICommand>("IoC.Register", "ExceptionHandler.Handle", (object[] args) => {
+        Ioc.Resolve<ICommand>("IoC.Register", "ExceptionHandler.Handle", (object[] args) =>
+        {
             Assert.Equal(exceptionCommandMock.Object, args[0]);
             Assert.Equal(thrownException, args[1]);
             return exceptionHandlerMock.Object;
