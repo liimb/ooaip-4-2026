@@ -1,0 +1,8 @@
+public {{PropertyType}} {{PropertyName}}
+{
+    get => PropertyAdapterFactory.Get<{{PropertyType}}>(
+        _values,
+        nameof({{PropertyName}}));
+
+    {{Setter}}
+}
