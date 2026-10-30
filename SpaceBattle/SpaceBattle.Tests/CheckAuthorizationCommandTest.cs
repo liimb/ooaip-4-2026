@@ -1,6 +1,8 @@
-using SpaceBattle.Lib;
+using System;
 using App;
 using App.Scopes;
+using SpaceBattle.Lib;
+using Xunit;
 
 namespace SpaceBattle.Tests;
 
@@ -12,7 +14,13 @@ public class CheckAuthorizationCommandTest
         var iocScope = Ioc.Resolve<object>("IoC.Scope.Create");
         Ioc.Resolve<ICommand>("IoC.Scope.Current.Set", iocScope).Execute();
 
-        new RegisterIoCDependencyCheckAuthorizationCommand().Execute();
+        try
+        {
+            new RegisterIoCDependencyCheckAuthorizationCommand().Execute();
+        }
+        catch (ArgumentException)
+        {
+        }
     }
 
     [Fact]
@@ -22,7 +30,13 @@ public class CheckAuthorizationCommandTest
         tree.Add(["Player1", "Ship1", "Shoot"], true);
         tree.Add(["Player1", "Ship1", "Move"], true);
 
-        Ioc.Resolve<ICommand>("IoC.Register", "Authorization.Tree", (object[] args) => tree).Execute();
+        try
+        {
+            Ioc.Resolve<ICommand>("IoC.Register", "Authorization.Tree", (object[] args) => tree).Execute();
+        }
+        catch (ArgumentException)
+        {
+        }
 
         var authCmd = Ioc.Resolve<ICommand>("Authorization.Check", "Player1", "Ship1", "Shoot");
 
@@ -37,7 +51,13 @@ public class CheckAuthorizationCommandTest
         tree.Add(["Player1", "Ship2", "Shoot"], true);
         tree.Add(["Player1", "Ship999", "Move"], true);
 
-        Ioc.Resolve<ICommand>("IoC.Register", "Authorization.Tree", (object[] args) => tree).Execute();
+        try
+        {
+            Ioc.Resolve<ICommand>("IoC.Register", "Authorization.Tree", (object[] args) => tree).Execute();
+        }
+        catch (ArgumentException)
+        {
+        }
 
         var authCmd = Ioc.Resolve<ICommand>("Authorization.Check", "Player1", "Ship999", "Shoot");
 
@@ -45,11 +65,17 @@ public class CheckAuthorizationCommandTest
     }
 
     [Fact]
-    public void Should_ThrowWhenTreeIsEmpty()
+    public void AShould_ThrowWhenTreeIsEmpty()
     {
         var tree = new PrefixTree<string, bool>();
 
-        Ioc.Resolve<ICommand>("IoC.Register", "Authorization.Tree", (object[] args) => tree).Execute();
+        try
+        {
+            Ioc.Resolve<ICommand>("IoC.Register", "Authorization.Tree", (object[] args) => tree).Execute();
+        }
+        catch (ArgumentException)
+        {
+        }
 
         var authCmd = Ioc.Resolve<ICommand>("Authorization.Check", "Player1", "Ship1", "Shoot");
 

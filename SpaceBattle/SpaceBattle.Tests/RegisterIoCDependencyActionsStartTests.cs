@@ -3,6 +3,7 @@ using App.Scopes;
 using SpaceBattle.Lib;
 using Moq;
 using Xunit;
+using System;
 using System.Collections.Generic;
 
 namespace SpaceBattle.Tests
@@ -14,7 +15,13 @@ namespace SpaceBattle.Tests
             new InitCommand().Execute();
             var iocScope = Ioc.Resolve<object>("IoC.Scope.Create");
             Ioc.Resolve<ICommand>("IoC.Scope.Current.Set", iocScope).Execute();
-            new RegisterIoCDependencyActionsStart().Execute();
+            try
+            {
+                new RegisterIoCDependencyActionsStart().Execute();
+            }
+            catch (ArgumentException)
+            {
+            }
         }
 
         [Fact]

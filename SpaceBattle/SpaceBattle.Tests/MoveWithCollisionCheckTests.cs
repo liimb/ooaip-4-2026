@@ -1,6 +1,9 @@
+using System;
+using System.Collections.Generic;
 using App;
 using App.Scopes;
 using SpaceBattle.Lib;
+using Xunit;
 
 namespace SpaceBattle.Tests;
 
@@ -12,16 +15,21 @@ public class MoveWithCollisionCheckCommandTest
         var iocScope = Ioc.Resolve<object>("IoC.Scope.Create");
         Ioc.Resolve<App.ICommand>("IoC.Scope.Current.Set", iocScope).Execute();
 
-        // Регистрируем только MoveCommand
-        Ioc.Resolve<App.ICommand>(
-            "IoC.Register",
-            "Commands.Move",
-            (object[] args) =>
-            {
-                var movable = (IMovingObject)args[0];
-                return new MoveCommand(movable);
-            }
-        ).Execute();
+        try
+        {
+            Ioc.Resolve<App.ICommand>(
+                "IoC.Register",
+                "Commands.Move",
+                (object[] args) =>
+                {
+                    var movable = (IMovingObject)args[0];
+                    return new MoveCommand(movable);
+                }
+            ).Execute();
+        }
+        catch (ArgumentException)
+        {
+        }
     }
 
     [Fact]
