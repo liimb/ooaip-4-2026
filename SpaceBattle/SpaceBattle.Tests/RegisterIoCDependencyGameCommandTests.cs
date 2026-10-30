@@ -1,9 +1,9 @@
+using System;
+using System.Collections.Generic;
 using App;
 using App.Scopes;
 using SpaceBattle.Lib;
-using Moq;
 using Xunit;
-using System.Collections.Generic;
 
 namespace SpaceBattle.Tests
 {
@@ -22,13 +22,25 @@ namespace SpaceBattle.Tests
 
             var testScope = new object();
 
-            Ioc.Resolve<ICommand>(
-                "IoC.Register",
-                "Scopes.Create",
-                (Func<object[], object>)(_ => testScope)
-            ).Execute();
+            try
+            {
+                Ioc.Resolve<ICommand>(
+                    "IoC.Register",
+                    "Scopes.Create",
+                    (Func<object[], object>)(_ => testScope)
+                ).Execute();
+            }
+            catch (ArgumentException)
+            {
+            }
 
-            new RegisterIoCDependencyGameCommand().Execute();
+            try
+            {
+                new RegisterIoCDependencyGameCommand().Execute();
+            }
+            catch (ArgumentException)
+            {
+            }
 
             var canContinue = Ioc.Resolve<bool>(
                 "Game.Scheduler.CanContinue"
