@@ -16,6 +16,8 @@ public class RegisterIoCDependencyMacroCommandTests
         var iocScope = Ioc.Resolve<object>("IoC.Scope.Create");
         Ioc.Resolve<ICommand>("IoC.Scope.Current.Set", iocScope).Execute();
 
+        AutoRegistrar.RegisterAll(typeof(IMovingObject).Assembly);
+
         try
         {
             new RegisterIoCDependencyMacroCommand().Execute();
@@ -45,7 +47,6 @@ public class RegisterIoCDependencyMacroCommandTests
 
         Ioc.Resolve<ICommand>("IoC.Register", "Commands.Move",
             (Func<object[], object>)(_ => mockMove.Object)).Execute();
-
         Ioc.Resolve<ICommand>("IoC.Register", "Commands.Rotate",
             (Func<object[], object>)(_ => mockRotate.Object)).Execute();
 

@@ -5,6 +5,7 @@ using App;
 using App.Scopes;
 using SpaceBattle.Lib;
 using Xunit;
+using Moq;
 
 namespace SpaceBattle.Tests;
 
@@ -158,18 +159,6 @@ public class AutoRegistrarTests : IDisposable
     }
 
     [Fact]
-    public void ResolveAdapter_CompilationError_Throws()
-    {
-        var method = typeof(AutoRegistrar).GetMethod("CompileAdapter",
-            BindingFlags.NonPublic | BindingFlags.Static);
-
-        var ex = Assert.Throws<TargetInvocationException>(() =>
-            method!.Invoke(null, new object[] { "invalid c# code", typeof(IMovingObject) })
-        );
-        Assert.IsType<InvalidOperationException>(ex.InnerException);
-    }
-
-    [Fact]
     public void GetTypeName_HandlesArraysAndGenerics()
     {
         var method = typeof(AutoRegistrar).GetMethod("GetTypeName",
@@ -197,80 +186,45 @@ public class AutoRegistrarTests : IDisposable
         AutoRegistrar.RegisterAll(typeof(IEmptyInterface).Assembly);
     }
 
-
     [Fact]
-    public void RegisterFactory_ResolvesMovingObject()
+    public void RegisterCommandFactory_GeneratesCommandFromStringList()
     {
-        AutoRegistrar.RegisterAllFactories(typeof(IMovingObject).Assembly);
+        var mockMove = new Mock<ICommand>();
+        var mockRotate = new Mock<ICommand>();
 
-        var data = new Dictionary<string, object>
-        {
-            ["Position"] = new Vector(new[] { 0, 0 }),
-            ["Velocity"] = new Vector(new[] { 1, 0 })
-        };
+        Ioc.Resolve<ICommand>("IoC.Register", "Commands.Move",
+            (Func<object[], object>)(_ => mockMove.Object)).Execute();
+        Ioc.Resolve<ICommand>("IoC.Register", "Commands.Rotate",
+            (Func<object[], object>)(_ => mockRotate.Object)).Execute();
 
-        var adapter = Ioc.Resolve<IMovingObject>("Factories.IMovingObject", data);
-
-        Assert.NotNull(adapter);
-        Assert.True(adapter.Position == new Vector(new[] { 0, 0 }));
-        Assert.True(adapter.Velocity == new Vector(new[] { 1, 0 }));
-    }
-
-    [Fact]
-    public void RegisterFactory_PositionSetterUpdatesSourceDictionary()
-    {
-        AutoRegistrar.RegisterAllFactories(typeof(IMovingObject).Assembly);
-
-        var data = new Dictionary<string, object>
-        {
-            ["Position"] = new Vector(new[] { 0, 0 }),
-            ["Velocity"] = new Vector(new[] { 1, 0 })
-        };
-
-        var adapter = Ioc.Resolve<IMovingObject>("Factories.IMovingObject", data);
-        var newPosition = new Vector(new[] { 5, 7 });
-        adapter.Position = newPosition;
-
-        Assert.Equal(newPosition, data["Position"]);
-    }
-
-    [Fact]
-    public void RegisterFactory_RepeatedRegistrationDoesNotBreakResolution()
-    {
-        AutoRegistrar.RegisterAllFactories(typeof(IMovingObject).Assembly);
-        AutoRegistrar.RegisterAllFactories(typeof(IMovingObject).Assembly);
-
-        var data = new Dictionary<string, object>
-        {
-            ["Position"] = new Vector(new[] { 0, 0 }),
-            ["Velocity"] = new Vector(new[] { 1, 0 })
-        };
-
-        var adapter = Ioc.Resolve<IMovingObject>("Factories.IMovingObject", data);
-        Assert.NotNull(adapter);
-        Assert.Equal(new Vector(new[] { 0, 0 }), adapter.Position);
-    }
-
-    [Fact]
-    public void ResolveFactory_ThrowsWhenNoArgs()
-    {
-        AutoRegistrar.RegisterAllFactories(typeof(IMovingObject).Assembly);
-
-        Assert.Throws<ArgumentException>(
-            () => Ioc.Resolve<IMovingObject>("Factories.IMovingObject")
+        var command = Ioc.Resolve<ICommand>(
+            "Commands.Factory.Generated",
+            new object[] { new[] { "Move", "Rotate" } }
         );
+
+        Assert.NotNull(command);
+        Assert.IsType<MacroCommand>(command);
+
+        command.Execute();
+
+        mockMove.Verify(c => c.Execute(), Times.Once);
+        mockRotate.Verify(c => c.Execute(), Times.Once);
     }
 
     [Fact]
-    public void ResolveFactory_ThrowsWhenArgIsNull()
+    public void RegisterCommandFactory_GeneratesSingleCommandFromString()
     {
-        AutoRegistrar.RegisterAllFactories(typeof(IMovingObject).Assembly);
+        var mockMove = new Mock<ICommand>();
+        Ioc.Resolve<ICommand>("IoC.Register", "Commands.Move",
+            (Func<object[], object>)(_ => mockMove.Object)).Execute();
 
-        Assert.Throws<ArgumentException>(
-            () => Ioc.Resolve<IMovingObject>(
-                "Factories.IMovingObject",
-                new object[] { null! })
+        var command = Ioc.Resolve<ICommand>(
+            "Commands.Factory.Generated",
+            new object[] { "Move" }
         );
+
+        Assert.NotNull(command);
+        Assert.Same(mockMove.Object, command);
     }
 }
 

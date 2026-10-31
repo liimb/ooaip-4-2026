@@ -22,6 +22,7 @@
 	<ItemGroup>
 		<EmbeddedResource Include="Templates/AdapterTemplate.txt" LogicalName="SpaceBattle.Lib.Templates.AdapterTemplate.txt" WithCulture="false" />
 		<EmbeddedResource Include="Templates/FactoryTemplate.txt" LogicalName="SpaceBattle.Lib.Templates.FactoryTemplate.txt" WithCulture="false" />
+		<EmbeddedResource Include="Templates/CommandFactoryTemplate.txt" LogicalName="SpaceBattle.Lib.Templates.CommandFactoryTemplate.txt" WithCulture="false" />
 	</ItemGroup>
 
 </Project>
