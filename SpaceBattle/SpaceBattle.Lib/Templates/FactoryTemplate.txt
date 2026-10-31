@@ -1,0 +1,29 @@
+using System;
+using System.Collections.Generic;
+using SpaceBattle.Lib;
+
+namespace SpaceBattle.Lib.Generated
+{
+    public static class GeneratedAdapterFactory
+    {
+        public static {{InterfaceName}} Create(object entity)
+        {
+            if (entity == null) 
+                throw new ArgumentNullException(nameof(entity));
+                
+            return new GeneratedAdapterImpl((IDictionary<string, object>)entity);
+        }
+
+        private class GeneratedAdapterImpl : {{InterfaceName}}
+        {
+            private readonly IDictionary<string, object> _values;
+
+            public GeneratedAdapterImpl(IDictionary<string, object> values)
+            {
+                _values = values;
+            }
+
+            {{GeneratedProperties}}
+        }
+    }
+}

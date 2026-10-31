@@ -1,24 +1,27 @@
-using System.Collections.Concurrent;
-using System.Reflection;
-using Microsoft.CodeAnalysis;
-using Microsoft.CodeAnalysis.CSharp;
-using App;
+using System;
 
-namespace SpaceBattle.Lib;
-
-public class AdapterFactory
+namespace SpaceBattle.Lib
 {
-    private readonly Func<object, object> _create;
-
-    public AdapterFactory(Func<object, object> create)
+    // Это и есть шаблон фабрики (Factory Method)
+    public class AdapterFactory
     {
-        ArgumentNullException.ThrowIfNull(create);
-        _create = create;
-    }
+        private readonly Func<object, object> _createFunc;
 
-    public object Create(object source)
-    {
-        ArgumentNullException.ThrowIfNull(source);
-        return _create(source);
+        // Конструктор принимает делегат, который умеет создавать объект
+        public AdapterFactory(Func<object, object> createFunc)
+        {
+            _createFunc = createFunc ?? throw new ArgumentNullException(nameof(createFunc));
+        }
+
+        // Главный метод фабрики: берет entity (словарь) и возвращает готовый адаптер
+        public object Create(object entity)
+        {
+            if (entity == null)
+            {
+                throw new ArgumentNullException(nameof(entity), "Entity (словарь) не может быть null.");
+            }
+
+            return _createFunc(entity);
+        }
     }
 }

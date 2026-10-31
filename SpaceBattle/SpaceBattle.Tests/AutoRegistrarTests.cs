@@ -196,6 +196,85 @@ public class AutoRegistrarTests : IDisposable
     {
         AutoRegistrar.RegisterAll(typeof(IEmptyInterface).Assembly);
     }
+
+    // Добавьте это в конец файла AutoRegistrarTests.cs
+
+    [Fact]
+    public void RegisterFactory_ResolvesMovingObject()
+    {
+        // 1. Регистрируем фабрики (вместо адаптеров)
+        AutoRegistrar.RegisterAllFactories(typeof(IMovingObject).Assembly);
+
+        var data = new Dictionary<string, object>
+        {
+            ["Position"] = new Vector(new[] { 0, 0 }),
+            ["Velocity"] = new Vector(new[] { 1, 0 })
+        };
+
+        // 2. Запрашиваем ФАБРИКУ по ключу "Factories.IMovingObject"
+        var adapter = Ioc.Resolve<IMovingObject>("Factories.IMovingObject", data);
+
+        Assert.NotNull(adapter);
+        Assert.True(adapter.Position == new Vector(new[] { 0, 0 }));
+        Assert.True(adapter.Velocity == new Vector(new[] { 1, 0 }));
+    }
+
+    [Fact]
+    public void RegisterFactory_PositionSetterUpdatesSourceDictionary()
+    {
+        AutoRegistrar.RegisterAllFactories(typeof(IMovingObject).Assembly);
+
+        var data = new Dictionary<string, object>
+        {
+            ["Position"] = new Vector(new[] { 0, 0 }),
+            ["Velocity"] = new Vector(new[] { 1, 0 })
+        };
+
+        var adapter = Ioc.Resolve<IMovingObject>("Factories.IMovingObject", data);
+        var newPosition = new Vector(new[] { 5, 7 });
+        adapter.Position = newPosition;
+
+        Assert.Equal(newPosition, data["Position"]);
+    }
+
+    [Fact]
+    public void RegisterFactory_RepeatedRegistrationDoesNotBreakResolution()
+    {
+        AutoRegistrar.RegisterAllFactories(typeof(IMovingObject).Assembly);
+        AutoRegistrar.RegisterAllFactories(typeof(IMovingObject).Assembly);
+
+        var data = new Dictionary<string, object>
+        {
+            ["Position"] = new Vector(new[] { 0, 0 }),
+            ["Velocity"] = new Vector(new[] { 1, 0 })
+        };
+
+        var adapter = Ioc.Resolve<IMovingObject>("Factories.IMovingObject", data);
+        Assert.NotNull(adapter);
+        Assert.Equal(new Vector(new[] { 0, 0 }), adapter.Position);
+    }
+
+    [Fact]
+    public void ResolveFactory_ThrowsWhenNoArgs()
+    {
+        AutoRegistrar.RegisterAllFactories(typeof(IMovingObject).Assembly);
+
+        Assert.Throws<ArgumentException>(
+            () => Ioc.Resolve<IMovingObject>("Factories.IMovingObject")
+        );
+    }
+
+    [Fact]
+    public void ResolveFactory_ThrowsWhenArgIsNull()
+    {
+        AutoRegistrar.RegisterAllFactories(typeof(IMovingObject).Assembly);
+
+        Assert.Throws<ArgumentException>(
+            () => Ioc.Resolve<IMovingObject>(
+                "Factories.IMovingObject",
+                new object[] { null! })
+        );
+    }
 }
 
 public class InvalidInterfacesPlaceholder { }

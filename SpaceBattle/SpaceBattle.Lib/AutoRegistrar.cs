@@ -11,8 +11,14 @@ public static class AutoRegistrar
     private const string AdapterTemplateResource =
         "SpaceBattle.Lib.Templates.AdapterTemplate.txt";
 
+    private const string FactoryTemplateResource =
+        "SpaceBattle.Lib.Templates.FactoryTemplate.txt";
+
     private static readonly ConcurrentDictionary<Type, ConstructorInfo>
         AdapterConstructors = new();
+
+    private static readonly ConcurrentDictionary<Type, Func<object, object>>
+        FactoryMethods = new();
 
     public static void RegisterAll(Assembly assembly)
     {
@@ -26,6 +32,21 @@ public static class AutoRegistrar
         foreach (var interfaceType in interfaceTypes)
         {
             RegisterAdapter(interfaceType);
+        }
+    }
+
+    public static void RegisterAllFactories(Assembly assembly)
+    {
+        ArgumentNullException.ThrowIfNull(assembly);
+
+        var interfaceTypes = assembly
+            .GetTypes()
+            .Where(IsSupportedInterface)
+            .ToArray();
+
+        foreach (var interfaceType in interfaceTypes)
+        {
+            RegisterFactory(interfaceType);
         }
     }
 
@@ -77,7 +98,7 @@ public static class AutoRegistrar
             CreateAdapterConstructor);
 
         var factory = new AdapterFactory(
-            values => constructor.Invoke(new[] { values }));
+            entity => constructor.Invoke(new[] { entity }));
 
         try
         {
@@ -89,9 +110,38 @@ public static class AutoRegistrar
                     if (args.Length == 0 || args[0] == null)
                     {
                         throw new ArgumentException(
-                            "Для создания адаптера необходимо передать словарь.");
+                            "Для создания адаптера необходимо передать словарь (entity).");
                     }
+
                     return factory.Create(args[0]);
+                }
+            ).Execute();
+        }
+        catch (ArgumentException)
+        {
+        }
+    }
+
+    private static void RegisterFactory(Type interfaceType)
+    {
+        var factoryFunc = FactoryMethods.GetOrAdd(
+            interfaceType,
+            CreateFactoryDelegate);
+
+        try
+        {
+            Ioc.Resolve<ICommand>(
+                "IoC.Register",
+                $"Factories.{interfaceType.Name}",
+                (object[] args) =>
+                {
+                    if (args.Length == 0 || args[0] == null)
+                    {
+                        throw new ArgumentException(
+                            "Для создания фабрики необходимо передать словарь (entity).");
+                    }
+
+                    return factoryFunc(args[0]);
                 }
             ).Execute();
         }
@@ -108,6 +158,17 @@ public static class AutoRegistrar
             ?? throw new InvalidOperationException(
                 $"У сгенерированного адаптера {adapterType.FullName} " +
                 "нет конструктора с параметром object.");
+    }
+
+    private static Func<object, object> CreateFactoryDelegate(Type interfaceType)
+    {
+        var source = GenerateFactorySource(interfaceType);
+        var factoryType = CompileFactory(source, interfaceType);
+
+        var createMethod = factoryType.GetMethod("Create", BindingFlags.Public | BindingFlags.Static)
+            ?? throw new InvalidOperationException("Не найден метод Create.");
+
+        return (entity) => createMethod.Invoke(null, new[] { entity })!;
     }
 
     private static string GenerateAdapterSource(Type interfaceType)
@@ -130,6 +191,18 @@ namespace SpaceBattle.Lib.Generated
         {generatedProperties}
     }}
 }}";
+    }
+
+    private static string GenerateFactorySource(Type interfaceType)
+    {
+        var generatedProperties = string.Join(
+            Environment.NewLine,
+            GetProperties(interfaceType)
+                .Select(GeneratePropertySource));
+
+        return ReadTemplate(FactoryTemplateResource)
+            .Replace("{{InterfaceName}}", GetTypeName(interfaceType))
+            .Replace("{{GeneratedProperties}}", generatedProperties);
     }
 
     private static string GeneratePropertySource(PropertyInfo property)
@@ -194,6 +267,16 @@ namespace SpaceBattle.Lib.Generated
 
     private static Type CompileAdapter(string source, Type interfaceType)
     {
+        return Compile(source, interfaceType, "GeneratedAdapter", "адаптера");
+    }
+
+    private static Type CompileFactory(string source, Type interfaceType)
+    {
+        return Compile(source, interfaceType, "GeneratedAdapterFactory", "фабрики");
+    }
+
+    private static Type Compile(string source, Type interfaceType, string typeName, string description)
+    {
         var syntaxTree = CSharpSyntaxTree.ParseText(source);
 
         var trustedAssemblies = (string?)AppContext.GetData(
@@ -214,7 +297,7 @@ namespace SpaceBattle.Lib.Generated
                 interfaceType.Assembly.Location));
 
         var compilation = CSharpCompilation.Create(
-            $"GeneratedAdapters_{Guid.NewGuid():N}",
+            $"Generated_{Guid.NewGuid():N}",
             new[] { syntaxTree },
             references.DistinctBy(reference => reference.Display),
             new CSharpCompilationOptions(
@@ -231,13 +314,13 @@ namespace SpaceBattle.Lib.Generated
                     .Where(diagnostic =>
                         diagnostic.Severity == DiagnosticSeverity.Error));
             throw new InvalidOperationException(
-                $"Ошибка компиляции адаптера:{Environment.NewLine}{errors}");
+                $"Ошибка компиляции {description}:{Environment.NewLine}{errors}");
         }
 
         stream.Position = 0;
         var generatedAssembly = Assembly.Load(stream.ToArray());
 
         return generatedAssembly.GetTypes()
-            .Single(type => type.Name == "GeneratedAdapter");
+            .Single(type => type.Name == typeName);
     }
 }
