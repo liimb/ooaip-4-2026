@@ -1,3 +1,4 @@
+using System.Linq; 
 using App;
 using App.Scopes;
 using Moq;
@@ -11,8 +12,11 @@ public class RegisterIoCDependencyMacroCommandTests
     public RegisterIoCDependencyMacroCommandTests()
     {
         new InitCommand().Execute();
-        var iocScope = Ioc.Resolve<object>("IoC.Scope.Create");
-        Ioc.Resolve<ICommand>("IoC.Scope.Current.Set", iocScope).Execute();
+
+        var newScope = Ioc.Resolve<object>("IoC.Scope.Create");
+        Ioc.Resolve<ICommand>("IoC.Scope.Current.Set", newScope).Execute();
+
+        new RegisterIoCDependencyMacroCommand().Execute();
     }
 
     [Theory]
@@ -21,8 +25,6 @@ public class RegisterIoCDependencyMacroCommandTests
     [InlineData(3)]
     public void RegisterMacroCommand_WithMultipleCommands_DependencyResolves(int count)
     {
-        var registerCommand = new RegisterIoCDependencyMacroCommand();
-        registerCommand.Execute();
 
         var commands = Enumerable.Range(0, count)
             .Select(_ => new Mock<ICommand>().Object)
@@ -37,8 +39,6 @@ public class RegisterIoCDependencyMacroCommandTests
     [Fact]
     public void RegisterMacroCommand_WithArrayOfCommands_DependencyResolves()
     {
-        var registerCommand = new RegisterIoCDependencyMacroCommand();
-        registerCommand.Execute();
 
         var mock1 = new Mock<ICommand>();
         var mock2 = new Mock<ICommand>();
@@ -53,8 +53,6 @@ public class RegisterIoCDependencyMacroCommandTests
     [Fact]
     public void RegisterMacroCommand_WithNullArgs_DependencyResolves()
     {
-        var registerCommand = new RegisterIoCDependencyMacroCommand();
-        registerCommand.Execute();
 
         var macroCommand = Ioc.Resolve<ICommand>("Commands.Macro", (object[])null!);
 
