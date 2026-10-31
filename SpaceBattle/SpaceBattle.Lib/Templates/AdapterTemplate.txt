@@ -1,17 +1,15 @@
 using System.Collections.Generic;
 using SpaceBattle.Lib;
-using System;
 
-namespace SpaceBattle.Lib.Generated;
-
-public class GeneratedAdapter : {{InterfaceName}}
+namespace SpaceBattle.Lib.Generated
 {
-    private readonly IDictionary<string, object> _values;
-
-    public GeneratedAdapter(object source)
+    public partial class GeneratedAdapter : {{InterfaceName}}
     {
-        _values = (IDictionary<string, object>)source;
-    }
+        private readonly IDictionary<string, object> _values;
 
-    {{GeneratedProperties}}
+        public GeneratedAdapter(object source)
+        {
+            _values = (IDictionary<string, object>)source;
+        }
+    }
 }

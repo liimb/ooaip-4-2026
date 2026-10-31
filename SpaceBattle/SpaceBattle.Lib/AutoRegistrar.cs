@@ -10,8 +10,6 @@ public static class AutoRegistrar
 {
     private const string AdapterTemplateResource =
         "SpaceBattle.Lib.Templates.AdapterTemplate.txt";
-    private const string PropertyTemplateResource =
-        "SpaceBattle.Lib.Templates.PropertyTemplate.txt";
 
     private static readonly ConcurrentDictionary<Type, ConstructorInfo>
         AdapterConstructors = new();
@@ -106,7 +104,6 @@ public static class AutoRegistrar
     {
         var source = GenerateAdapterSource(interfaceType);
         var adapterType = CompileAdapter(source, interfaceType);
-
         return adapterType.GetConstructor(new[] { typeof(object) })
             ?? throw new InvalidOperationException(
                 $"У сгенерированного адаптера {adapterType.FullName} " +
@@ -115,27 +112,43 @@ public static class AutoRegistrar
 
     private static string GenerateAdapterSource(Type interfaceType)
     {
+        var template = ReadTemplate(AdapterTemplateResource);
+
+        template = template.Replace("{{InterfaceName}}", GetTypeName(interfaceType));
+
         var generatedProperties = string.Join(
             Environment.NewLine,
             GetProperties(interfaceType)
                 .Select(GeneratePropertySource));
 
-        return ReadTemplate(AdapterTemplateResource)
-            .Replace("{{InterfaceName}}", GetTypeName(interfaceType))
-            .Replace("{{GeneratedProperties}}", generatedProperties);
+        return template + $@"
+
+namespace SpaceBattle.Lib.Generated
+{{
+    public partial class GeneratedAdapter
+    {{
+        {generatedProperties}
+    }}
+}}";
     }
 
     private static string GeneratePropertySource(PropertyInfo property)
     {
         var setter = property.SetMethod == null
             ? string.Empty
-            : "set => PropertyAdapterFactory.CreateSetCommand(" +
-              $"_values, nameof({property.Name}), value).Execute();";
+            : $"set => PropertyAdapterFactory.CreateSetCommand(_values, nameof({property.Name}), value).Execute();";
 
-        return ReadTemplate(PropertyTemplateResource)
-            .Replace("{{PropertyType}}", GetTypeName(property.PropertyType))
-            .Replace("{{PropertyName}}", property.Name)
-            .Replace("{{Setter}}", setter);
+        var typeName = GetTypeName(property.PropertyType);
+        var name = property.Name;
+
+        return $@"
+        public {typeName} {name}
+        {{
+            get => PropertyAdapterFactory.Get<{typeName}>(
+                _values,
+                nameof({name}));
+            {setter}
+        }}";
     }
 
     private static string ReadTemplate(string resourceName)
@@ -165,7 +178,6 @@ public static class AutoRegistrar
             {
                 genericName = genericName[..tickIndex];
             }
-
             return $"global::{genericName.Replace('+', '.')}<" +
                    string.Join(
                        ", ",
@@ -218,7 +230,6 @@ public static class AutoRegistrar
                 result.Diagnostics
                     .Where(diagnostic =>
                         diagnostic.Severity == DiagnosticSeverity.Error));
-
             throw new InvalidOperationException(
                 $"Ошибка компиляции адаптера:{Environment.NewLine}{errors}");
         }
