@@ -6,7 +6,7 @@ using App;
 
 namespace SpaceBattle.Lib;
 
-public sealed class AdapterFactory
+public class AdapterFactory
 {
     private readonly Func<object, object> _create;
 

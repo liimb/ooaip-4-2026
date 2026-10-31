@@ -6,12 +6,12 @@ namespace SpaceBattle.Tests;
 
 public class AdapterFactoryTests
 {
-    private sealed class TestSource
+    private class TestSource
     {
         public int Value { get; set; }
     }
 
-    private sealed class TestAdapter
+    private class TestAdapter
     {
         public object Source { get; }
         public TestAdapter(object source) { Source = source; }

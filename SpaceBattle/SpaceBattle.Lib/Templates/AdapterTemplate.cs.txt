@@ -4,7 +4,7 @@ using System;
 
 namespace SpaceBattle.Lib.Generated;
 
-public sealed class GeneratedAdapter : {{InterfaceName}}
+public class GeneratedAdapter : {{InterfaceName}}
 {
     private readonly IDictionary<string, object> _values;
 
