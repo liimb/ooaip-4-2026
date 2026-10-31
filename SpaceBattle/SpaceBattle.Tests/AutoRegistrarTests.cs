@@ -197,12 +197,10 @@ public class AutoRegistrarTests : IDisposable
         AutoRegistrar.RegisterAll(typeof(IEmptyInterface).Assembly);
     }
 
-    // Добавьте это в конец файла AutoRegistrarTests.cs
 
     [Fact]
     public void RegisterFactory_ResolvesMovingObject()
     {
-        // 1. Регистрируем фабрики (вместо адаптеров)
         AutoRegistrar.RegisterAllFactories(typeof(IMovingObject).Assembly);
 
         var data = new Dictionary<string, object>
@@ -211,7 +209,6 @@ public class AutoRegistrarTests : IDisposable
             ["Velocity"] = new Vector(new[] { 1, 0 })
         };
 
-        // 2. Запрашиваем ФАБРИКУ по ключу "Factories.IMovingObject"
         var adapter = Ioc.Resolve<IMovingObject>("Factories.IMovingObject", data);
 
         Assert.NotNull(adapter);
