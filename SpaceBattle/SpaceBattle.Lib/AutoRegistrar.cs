@@ -9,9 +9,9 @@ namespace SpaceBattle.Lib;
 public static class AutoRegistrar
 {
     private const string AdapterTemplateResource =
-        "SpaceBattle.Lib.Templates.AdapterTemplate.cs.txt";
+        "SpaceBattle.Lib.Templates.AdapterTemplate.txt";
     private const string PropertyTemplateResource =
-        "SpaceBattle.Lib.Templates.PropertyTemplate.cs.txt";
+        "SpaceBattle.Lib.Templates.PropertyTemplate.txt";
 
     private static readonly ConcurrentDictionary<Type, ConstructorInfo>
         AdapterConstructors = new();

@@ -20,9 +20,9 @@
   </ItemGroup>
 
 	<ItemGroup>
-		<EmbeddedResource Include="Templates/AdapterTemplate.cs.txt" LogicalName="SpaceBattle.Lib.Templates.AdapterTemplate.cs.txt" WithCulture="false" />
+		<EmbeddedResource Include="Templates/AdapterTemplate.txt" LogicalName="SpaceBattle.Lib.Templates.AdapterTemplate.txt" WithCulture="false" />
 
-		<EmbeddedResource Include="Templates/PropertyTemplate.cs.txt" LogicalName="SpaceBattle.Lib.Templates.PropertyTemplate.cs.txt" WithCulture="false" />
+		<EmbeddedResource Include="Templates/PropertyTemplate.txt" LogicalName="SpaceBattle.Lib.Templates.PropertyTemplate.txt" WithCulture="false" />
 	</ItemGroup>
 
 </Project>
