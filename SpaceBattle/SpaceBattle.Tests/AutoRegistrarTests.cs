@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Reflection;
 using App;
 using App.Scopes;
 using SpaceBattle.Lib;
@@ -131,6 +132,7 @@ public class AutoRegistrarTests : IDisposable
         var adapter = Ioc.Resolve<IMovingObject>("Adapters.IMovingObject", data);
         Assert.NotNull(adapter);
     }
+
     [Fact]
     public void ResolveAdapter_ThrowsWhenNoArgs()
     {
@@ -148,4 +150,59 @@ public class AutoRegistrarTests : IDisposable
                 new object[] { null! })
         );
     }
+
+    [Fact]
+    public void RegisterAll_WithInvalidInterfaces_IgnoresThem()
+    {
+        AutoRegistrar.RegisterAll(typeof(InvalidInterfacesPlaceholder).Assembly);
+    }
+
+    [Fact]
+    public void ResolveAdapter_CompilationError_Throws()
+    {
+        var method = typeof(AutoRegistrar).GetMethod("CompileAdapter",
+            BindingFlags.NonPublic | BindingFlags.Static);
+
+        var ex = Assert.Throws<TargetInvocationException>(() =>
+            method!.Invoke(null, new object[] { "invalid c# code", typeof(IMovingObject) })
+        );
+        Assert.IsType<InvalidOperationException>(ex.InnerException);
+    }
+
+    [Fact]
+    public void GetTypeName_HandlesArraysAndGenerics()
+    {
+        var method = typeof(AutoRegistrar).GetMethod("GetTypeName",
+            BindingFlags.NonPublic | BindingFlags.Static);
+
+        var arrayName = (string)method!.Invoke(null, new object[] { typeof(int[]) })!;
+        Assert.Equal("global::System.Int32[]", arrayName);
+
+        var genericName = (string)method.Invoke(null, new object[] { typeof(List<int>) })!;
+        Assert.Contains("global::System.Collections.Generic.List<global::System.Int32>", genericName);
+
+        var normalName = (string)method.Invoke(null, new object[] { typeof(string) })!;
+        Assert.Equal("global::System.String", normalName);
+    }
+
+    [Fact]
+    public void RegisterAll_WithGenericInterface_IgnoresIt()
+    {
+        AutoRegistrar.RegisterAll(typeof(IGenericInterface<>).Assembly);
+    }
+
+    [Fact]
+    public void RegisterAll_WithEmptyInterface_IgnoresIt()
+    {
+        AutoRegistrar.RegisterAll(typeof(IEmptyInterface).Assembly);
+    }
 }
+
+public class InvalidInterfacesPlaceholder { }
+
+public interface IGenericInterface<T> { int Value { get; } }
+public interface IEmptyInterface { }
+public interface IIndexerInterface { int this[int index] { get; } }
+public interface IWriteOnlyInterface { int Value { set; } }
+public interface IMethodOnlyInterface { void DoSomething(); }
+public interface IGenericPropertyInterface { List<int> Values { get; } }
