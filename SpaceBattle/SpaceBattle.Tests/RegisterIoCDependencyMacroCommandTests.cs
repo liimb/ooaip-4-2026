@@ -1,4 +1,4 @@
-using System.Linq; 
+using System.Linq;
 using App;
 using App.Scopes;
 using Moq;
