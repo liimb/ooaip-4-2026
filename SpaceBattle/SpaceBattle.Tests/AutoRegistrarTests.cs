@@ -11,21 +11,30 @@ namespace SpaceBattle.Tests;
 
 public class AutoRegistrarTests : IDisposable
 {
-    private readonly object _previousScope;
+    private readonly ICommand _restoreScope;
 
     public AutoRegistrarTests()
     {
         new InitCommand().Execute();
-        _previousScope = Ioc.Resolve<object>("IoC.Scope.Current");
+        var previousScope = Ioc.Resolve<object>("IoC.Scope.Current");
+        _restoreScope = Ioc.Resolve<ICommand>("IoC.Scope.Current.Set", previousScope);
         var iocScope = Ioc.Resolve<object>("IoC.Scope.Create");
         Ioc.Resolve<ICommand>("IoC.Scope.Current.Set", iocScope).Execute();
 
-        AutoRegistrar.RegisterAll(typeof(IMovingObject).Assembly);
+        try
+        {
+            AutoRegistrar.RegisterAll(typeof(IMovingObject).Assembly);
+        }
+        catch
+        {
+            _restoreScope.Execute();
+            throw;
+        }
     }
 
     public void Dispose()
     {
-        Ioc.Resolve<ICommand>("IoC.Scope.Current.Set", _previousScope).Execute();
+        _restoreScope.Execute();
     }
 
     [Fact]
@@ -187,8 +196,42 @@ public class AutoRegistrarTests : IDisposable
     }
 
     [Fact]
+    public void RegisterAll_GeneratesMoveCommandFromTemplate()
+    {
+        var data = new Dictionary<string, object>
+        {
+            ["Position"] = new Vector(new[] { 0, 0 }),
+            ["Velocity"] = new Vector(new[] { 2, 0 })
+        };
+
+        var command = Ioc.Resolve<ICommand>(
+            "Commands.SpaceBattle_Lib_MoveCommand",
+            data
+        );
+
+        command.Execute();
+
+        Assert.Equal(new Vector(new[] { 2, 0 }), data["Position"]);
+    }
+
+    [Fact]
+    public void RegisterAll_GeneratesShortMoveCommandAlias()
+    {
+        var data = new Dictionary<string, object>
+        {
+            ["Position"] = new Vector(new[] { 0, 0 }),
+            ["Velocity"] = new Vector(new[] { 3, 0 })
+        };
+
+        Ioc.Resolve<ICommand>("Commands.Move", data).Execute();
+
+        Assert.Equal(new Vector(new[] { 3, 0 }), data["Position"]);
+    }
+
+    [Fact]
     public void RegisterCommandFactory_GeneratesCommandFromStringList()
     {
+        UseChildScope();
         var mockMove = new Mock<ICommand>();
         var mockRotate = new Mock<ICommand>();
 
@@ -214,6 +257,7 @@ public class AutoRegistrarTests : IDisposable
     [Fact]
     public void RegisterCommandFactory_GeneratesSingleCommandFromString()
     {
+        UseChildScope();
         var mockMove = new Mock<ICommand>();
         Ioc.Resolve<ICommand>("IoC.Register", "Commands.Move",
             (Func<object[], object>)(_ => mockMove.Object)).Execute();
@@ -225,6 +269,129 @@ public class AutoRegistrarTests : IDisposable
 
         Assert.NotNull(command);
         Assert.Same(mockMove.Object, command);
+    }
+
+    private static void UseChildScope()
+    {
+        var scope = Ioc.Resolve<object>("IoC.Scope.Create");
+        Ioc.Resolve<ICommand>("IoC.Scope.Current.Set", scope).Execute();
+    }
+
+    [Fact]
+    public void ResolveAdapter_ThrowsWhenArgsArrayIsNull()
+    {
+        Assert.Throws<ArgumentException>(() =>
+            Ioc.Resolve<IMovingObject>("Adapters.IMovingObject", (object[])null!));
+    }
+
+    [Fact]
+    public void ResolveAdapter_RejectsSourceThatIsNotDictionary()
+    {
+        Assert.Throws<ArgumentException>(() =>
+            Ioc.Resolve<IMovingObject>("Adapters.IMovingObject", new object()));
+    }
+
+    [Fact]
+    public void RegisterAll_RegistersDependenciesInEachScope()
+    {
+        var first = Ioc.Resolve<IMovingObject>("Adapters.IMovingObject",
+            new Dictionary<string, object>());
+
+        UseChildScope();
+        AutoRegistrar.RegisterAll(typeof(IMovingObject).Assembly);
+        var second = Ioc.Resolve<IMovingObject>("Adapters.IMovingObject",
+            new Dictionary<string, object>());
+
+        Assert.NotSame(first, second);
+        Assert.Equal(first.GetType(), second.GetType());
+    }
+
+    [Fact]
+    public void RegisterAll_SupportsGenericProperties()
+    {
+        AutoRegistrar.RegisterAll(typeof(IGenericPropertyInterface).Assembly);
+        var values = new List<int> { 1, 2 };
+        var adapter = Ioc.Resolve<IGenericPropertyInterface>(
+            "Adapters.IGenericPropertyInterface",
+            new Dictionary<string, object> { ["Values"] = values });
+
+        Assert.Same(values, adapter.Values);
+    }
+
+    [Theory]
+    [InlineData(typeof(IGenericInterface<>))]
+    [InlineData(typeof(IEmptyInterface))]
+    [InlineData(typeof(IIndexerInterface))]
+    [InlineData(typeof(IWriteOnlyInterface))]
+    [InlineData(typeof(IMethodOnlyInterface))]
+    public void IsSupportedInterface_RejectsUnsupportedContracts(Type type)
+    {
+        Assert.Equal(false, InvokeRegistrar("IsSupportedInterface", type));
+    }
+
+    [Fact]
+    public void ReadTemplate_ReportsMissingResource()
+    {
+        var error = Assert.Throws<TargetInvocationException>(() =>
+            InvokeRegistrar("ReadTemplate", "Missing.Template.txt"));
+
+        var cause = Assert.IsType<InvalidOperationException>(error.InnerException);
+        Assert.Contains("Missing.Template.txt", cause.Message);
+    }
+
+    [Fact]
+    public void CompileSource_ReportsCompilationErrors()
+    {
+        var error = Assert.Throws<TargetInvocationException>(() =>
+            InvokeRegistrar("CompileSource", "public class Broken {", Type.EmptyTypes));
+
+        var cause = Assert.IsType<InvalidOperationException>(error.InnerException);
+        Assert.Contains("CS1513", cause.Message);
+    }
+
+    private static object? InvokeRegistrar(string methodName, params object[] args)
+    {
+        return typeof(AutoRegistrar)
+            .GetMethod(methodName, BindingFlags.NonPublic | BindingFlags.Static)!
+            .Invoke(null, args);
+    }
+
+    [Fact]
+    public void GetCreateMethod_ReportsInvalidFactoryContract()
+    {
+        var error = Assert.Throws<TargetInvocationException>(() =>
+            InvokeRegistrar("GetCreateMethod", typeof(InvalidInterfacesPlaceholder)));
+
+        var cause = Assert.IsType<InvalidOperationException>(error.InnerException);
+        Assert.Contains("Create", cause.Message);
+        Assert.Contains(nameof(InvalidInterfacesPlaceholder), cause.Message);
+    }
+
+    [Fact]
+    public void GetPlatformReferences_ReportsMissingPlatformAssemblies()
+    {
+        var error = Assert.Throws<TargetInvocationException>(() =>
+            InvokeRegistrar("GetPlatformReferences", new object[] { null! }));
+
+        Assert.IsType<InvalidOperationException>(error.InnerException);
+    }
+
+    [Fact]
+    public void GetDependencyTypeName_UsesNameWhenFullNameIsUnavailable()
+    {
+        var parameter = typeof(IGenericInterface<>).GetGenericArguments()[0];
+
+        Assert.Equal("T", InvokeRegistrar("GetDependencyTypeName", parameter));
+    }
+
+    [Fact]
+    public void GetTypeName_RejectsTypeWithoutFullName()
+    {
+        var parameter = typeof(IGenericInterface<>).GetGenericArguments()[0];
+        var error = Assert.Throws<TargetInvocationException>(() =>
+            InvokeRegistrar("GetTypeName", parameter));
+
+        Assert.IsType<InvalidOperationException>(error.InnerException);
     }
 }
 

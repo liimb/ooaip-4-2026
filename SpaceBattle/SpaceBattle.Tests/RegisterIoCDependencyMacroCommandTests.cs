@@ -8,24 +8,35 @@ using Xunit;
 
 namespace SpaceBattle.Tests;
 
-public class RegisterIoCDependencyMacroCommandTests
+public class RegisterIoCDependencyMacroCommandTests : IDisposable
 {
+    private readonly ICommand _restoreScope;
+
     public RegisterIoCDependencyMacroCommandTests()
     {
         new InitCommand().Execute();
+        var previousScope = Ioc.Resolve<object>("IoC.Scope.Current");
+        _restoreScope = Ioc.Resolve<ICommand>("IoC.Scope.Current.Set", previousScope);
         var iocScope = Ioc.Resolve<object>("IoC.Scope.Create");
         Ioc.Resolve<ICommand>("IoC.Scope.Current.Set", iocScope).Execute();
 
-        AutoRegistrar.RegisterAll(typeof(IMovingObject).Assembly);
-
         try
         {
+            AutoRegistrar.RegisterAll(typeof(IMovingObject).Assembly);
+
+            // Test doubles override generated commands in a child scope.
+            var testScope = Ioc.Resolve<object>("IoC.Scope.Create");
+            Ioc.Resolve<ICommand>("IoC.Scope.Current.Set", testScope).Execute();
             new RegisterIoCDependencyMacroCommand().Execute();
         }
-        catch (ArgumentException)
+        catch
         {
+            _restoreScope.Execute();
+            throw;
         }
     }
+
+    public void Dispose() => _restoreScope.Execute();
 
     [Fact]
     public void RegisterMacroCommand_WithNoArgs_ReturnsEmptyMacroCommand()

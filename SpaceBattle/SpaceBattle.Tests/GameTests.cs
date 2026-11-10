@@ -8,14 +8,20 @@ using Moq;
 using SpaceBattle.Lib;
 using Xunit;
 
-public class GameTests
+public class GameTests : IDisposable
 {
+    private readonly ICommand _restoreScope;
+
     public GameTests()
     {
         new InitCommand().Execute();
+        var previousScope = Ioc.Resolve<object>("IoC.Scope.Current");
+        _restoreScope = Ioc.Resolve<ICommand>("IoC.Scope.Current.Set", previousScope);
         var iocScope = Ioc.Resolve<object>("IoC.Scope.Create");
         Ioc.Resolve<ICommand>("IoC.Scope.Current.Set", iocScope).Execute();
     }
+
+    public void Dispose() => _restoreScope.Execute();
 
     [Fact]
     public void GameExecution_RunsCommandsAndHandlesExceptions()
