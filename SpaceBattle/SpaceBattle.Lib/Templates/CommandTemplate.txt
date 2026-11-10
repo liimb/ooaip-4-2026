@@ -1,0 +1,15 @@
+using App;
+using SpaceBattle.Lib;
+
+namespace SpaceBattle.Lib.Generated
+{
+    public static class {{FactoryTypeName}}
+    {
+        public static ICommand Create(object[] args)
+        {
+            return new {{CommandType}}(
+                Ioc.Resolve<{{InterfaceType}}>("{{AdapterDependencyName}}", args)
+            );
+        }
+    }
+}

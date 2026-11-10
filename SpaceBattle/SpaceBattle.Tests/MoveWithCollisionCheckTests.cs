@@ -71,7 +71,7 @@ public class MoveWithCollisionCheckCommandTest
         };
     }
 
-    private sealed class MovingDictionaryAdapter : IMovingObject
+    private class MovingDictionaryAdapter : IMovingObject
     {
         private readonly IDictionary<string, object> _gameObject;
 
@@ -89,7 +89,7 @@ public class MoveWithCollisionCheckCommandTest
         public Vector Velocity => (Vector)_gameObject["Velocity"];
     }
 
-    private sealed class CollisionDictionaryAdapter : ICollisionObject
+    private class CollisionDictionaryAdapter : ICollisionObject
     {
         private readonly IDictionary<string, object> _gameObject;
 
@@ -105,7 +105,7 @@ public class MoveWithCollisionCheckCommandTest
         public IVector Velocity => new VectorAdapter((Vector)_gameObject["Velocity"]);
     }
 
-    private sealed class VectorAdapter : IVector
+    private class VectorAdapter : IVector
     {
         private readonly Vector _vector;
 
