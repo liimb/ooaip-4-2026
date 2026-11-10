@@ -39,6 +39,22 @@ public class RegisterIoCDependencyMacroCommandTests : IDisposable
     public void Dispose() => _restoreScope.Execute();
 
     [Fact]
+    public void RegisterMacroCommand_RepeatedRegistration_PreservesExistingFactory()
+    {
+        var command = new Mock<ICommand>();
+        var args = new object[] { new ICommand[] { command.Object } };
+        var before = Ioc.Resolve<ICommand>("Commands.Macro", args);
+
+        var exception = Record.Exception(() =>
+            new RegisterIoCDependencyMacroCommand().Execute());
+
+        Assert.Null(exception);
+        Assert.Same(before, Ioc.Resolve<ICommand>("Commands.Macro", args));
+        Ioc.Resolve<ICommand>("Commands.Macro", args).Execute();
+        command.Verify(c => c.Execute(), Times.Once);
+    }
+
+    [Fact]
     public void RegisterMacroCommand_WithNoArgs_ReturnsEmptyMacroCommand()
     {
         var macroCommand = Ioc.Resolve<ICommand>("Commands.Macro");
