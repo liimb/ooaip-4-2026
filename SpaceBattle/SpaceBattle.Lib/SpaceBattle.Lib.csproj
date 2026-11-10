@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
@@ -13,6 +13,17 @@
     <Reference Include="scopes">
       <HintPath>..\Common\scopes.dll</HintPath>
     </Reference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="5.9.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="Templates/AdapterTemplate.txt" LogicalName="SpaceBattle.Lib.Templates.AdapterTemplate.txt" WithCulture="false" />
+    <EmbeddedResource Include="Templates/FactoryTemplate.txt" LogicalName="SpaceBattle.Lib.Templates.FactoryTemplate.txt" WithCulture="false" />
+    <EmbeddedResource Include="Templates/CommandFactoryTemplate.txt" LogicalName="SpaceBattle.Lib.Templates.CommandFactoryTemplate.txt" WithCulture="false" />
+    <EmbeddedResource Include="Templates/CommandTemplate.txt" LogicalName="SpaceBattle.Lib.Templates.CommandTemplate.txt" WithCulture="false" />
   </ItemGroup>
 
 </Project>
