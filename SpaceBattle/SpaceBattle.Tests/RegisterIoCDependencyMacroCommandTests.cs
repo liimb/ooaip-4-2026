@@ -24,7 +24,6 @@ public class RegisterIoCDependencyMacroCommandTests : IDisposable
         {
             AutoRegistrar.RegisterAll(typeof(IMovingObject).Assembly);
 
-            // Test doubles override generated commands in a child scope.
             var testScope = Ioc.Resolve<object>("IoC.Scope.Create");
             Ioc.Resolve<ICommand>("IoC.Scope.Current.Set", testScope).Execute();
             new RegisterIoCDependencyMacroCommand().Execute();
