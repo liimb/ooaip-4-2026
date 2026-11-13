@@ -56,7 +56,7 @@ public class GameTests
 
             game.Execute();
 
-            setScopeCommandMock.Verify(c => c.Execute(), Times.Once);
+            setScopeCommandMock.Verify(c => c.Execute(), Times.Exactly(2));
             normalCommandMock.Verify(c => c.Execute(), Times.Once);
             exceptionCommandMock.Verify(c => c.Execute(), Times.Once);
             exceptionHandlerMock.Verify(c => c.Execute(), Times.Once);

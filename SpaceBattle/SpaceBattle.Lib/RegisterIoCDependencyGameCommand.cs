@@ -9,18 +9,9 @@ public class RegisterIoCDependencyGameCommand : ICommand
         Ioc.Resolve<ICommand>("IoC.Register", "Game.Create", (object[] args) =>
         {
             var gameId = (Guid)args[0];
-            var scope = Ioc.Resolve<object>("Scopes.Create");
-            return new Game(gameId, scope);
+            var server = (GameServer)args[1];
+            var configure = args.Length > 2 ? (Action<GameScope>)args[2] : null;
+            return server.CreateGame(gameId, configure);
         }).Execute();
-
-        Ioc.Resolve<ICommand>("IoC.Register", "Game.Scheduler.CanContinue", (object[] args) =>
-        {
-            return (object)false;
-        }).Execute();
-
-        Ioc.Resolve<ICommand>("IoC.Register", "Game.Scheduler.Take", (Func<object[], object>)((object[] args) =>
-        {
-            return null!;
-        })).Execute();
     }
 }
