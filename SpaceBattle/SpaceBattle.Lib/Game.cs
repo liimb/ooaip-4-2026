@@ -1,4 +1,4 @@
-﻿using System.Diagnostics;
+using System.Diagnostics;
 using App;
 
 namespace SpaceBattle.Lib;
@@ -16,6 +16,17 @@ public class Game : ICommand
     private int _pending;
     private int _executing;
     private int _state;
+    private int _cancelRequested;
+    internal Action? AfterQuantum { get; set; }
+    internal void CancelPending() => Interlocked.Exchange(ref _cancelRequested, 1);
+    internal void ReserveControl() => Interlocked.Increment(ref _pending);
+    internal void Rebind(Worker worker, Action release)
+    {
+        if (Volatile.Read(ref _executing) != 0 || PendingCount != 0)
+            throw new InvalidOperationException("Game is not at a transfer boundary.");
+        _worker = worker;
+        _release = release;
+    }
 
     public Game(Guid gameId, object scope)
     {
@@ -114,7 +125,10 @@ public class Game : ICommand
             while (_commands.TryDequeue(out var command))
             {
                 var commandStarted = _clock.GetTimestamp();
-                try { command.Execute(); }
+                try
+                {
+                    if (Volatile.Read(ref _cancelRequested) == 0) command.Execute();
+                }
                 catch (Exception error) { Report(new GameDiagnostic(Id, "CommandFailed", TimeSpan.Zero, error)); }
                 finally
                 {
@@ -124,7 +138,7 @@ public class Game : ICommand
                         Report(new GameDiagnostic(Id, "SlowCommand", duration));
                 }
                 count++;
-                if (count >= _options.MaxCommandsPerQuantum ||
+                if (AfterQuantum != null || count >= _options.MaxCommandsPerQuantum ||
                     _clock.GetElapsedTime(started) >= TimeSpan.FromMilliseconds(_options.QuantumMilliseconds)) break;
             }
         }
@@ -159,6 +173,11 @@ public class Game : ICommand
     {
         if (_worker?.IsCurrentThread != true)
             throw new InvalidOperationException("Game queue is accessible only on its assigned worker.");
+    }
+    internal void AssertContext()
+    {
+        RequireWorker();
+        if (Volatile.Read(ref _executing) == 0) throw new InvalidOperationException("Game is not executing a command.");
     }
 
     private void SetState(GameState state) => Volatile.Write(ref _state, (int)state);
