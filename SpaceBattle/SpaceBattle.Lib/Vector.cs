@@ -1,10 +1,11 @@
 namespace SpaceBattle.Lib;
 
-public class Vector(int[] coord)
+public class Vector(int[] coord) : IVector
 {
     private readonly int[] coordinates = coord;
 
     public int Dimension => coordinates.Length;
+    public int[] GetCoordinates() => (int[])coordinates.Clone();
 
     public static Vector operator +(Vector a, Vector b)
     {
