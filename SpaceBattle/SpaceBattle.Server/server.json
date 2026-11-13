@@ -11,6 +11,23 @@
     "SlowCommandMilliseconds": 100
   },
   "MaxGames": 1024,
+  "Gameplay": {
+    "MoveFuel": 1,
+    "RotateFuel": 1,
+    "ShotFuel": 2,
+    "MaxFuel": 1000,
+    "BonusFuel": 20,
+    "RefuelDistance": 5,
+    "RocketSpeed": 3,
+    "RocketLifetime": 100,
+    "MaxObjects": 1000
+  },
+  "Lifecycle": {
+    "TimeoutMilliseconds": 10000,
+    "SnapshotPath": "snapshots/server.json",
+    "SaveOnSoftStop": true,
+    "RestoreOnStart": true
+  },
   "Endpoint": {
     "Url": "http://127.0.0.1:5080",
     "MaxRequestBytes": 16384

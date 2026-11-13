@@ -1,4 +1,4 @@
-﻿using App;
+using App;
 
 namespace SpaceBattle.Lib;
 
@@ -17,6 +17,13 @@ public class GameScheduler
 
     public int PendingCount => Volatile.Read(ref _pending);
     public int GameCount => Volatile.Read(ref _gameCount);
+    internal bool Post(Action action) => _worker.TrySend(new Callback(action));
+    internal void TransferIn(Game game)
+    {
+        game.Rebind(_worker, () => Interlocked.Decrement(ref _pending));
+        Interlocked.Increment(ref _gameCount);
+    }
+    internal void TransferOut() => Interlocked.Decrement(ref _gameCount);
 
     internal void Assign(Game game)
     {
@@ -49,11 +56,18 @@ public class GameScheduler
         catch (Exception error) { game.Abort(error); }
         if (game.HasCommands) _ready.Enqueue(game);
         else game.Scheduled = false;
+        var after = game.AfterQuantum;
+        game.AfterQuantum = null;
+        after?.Invoke();
         return true;
     }
 
     private class Delivery(GameScheduler scheduler, Game game, ICommand command) : ICommand
     {
         public void Execute() => scheduler.Deliver(game, command);
+    }
+    private class Callback(Action action) : ICommand
+    {
+        public void Execute() => action();
     }
 }
