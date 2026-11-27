@@ -1,0 +1,16 @@
+using System;
+using SpaceBattle.Lib;
+
+namespace SpaceBattle.Lib.Generated
+{
+    public static class GeneratedAdapterFactory
+    {
+        public static {{InterfaceName}} Create(object entity)
+        {
+            if (entity == null)
+                throw new ArgumentNullException(nameof(entity));
+
+            return new GeneratedAdapter(entity);
+        }
+    }
+}

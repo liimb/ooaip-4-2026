@@ -1,0 +1,45 @@
+using System;
+using System.Linq;
+using App;
+using SpaceBattle.Lib;
+
+namespace SpaceBattle.Lib.Generated
+{
+    public static class GeneratedCommandFactory
+    {
+        public static ICommand Create(object[] args)
+        {
+            if (args == null || args.Length == 0)
+                return new MacroCommand();
+
+            if (args.Length == 1 && args[0] is string singleName)
+            {
+                return Ioc.Resolve<ICommand>($"Commands.{singleName}");
+            }
+
+            if (args.Length == 1 && args[0] is string[] commandNames)
+            {
+                if (commandNames.Length == 1)
+                    return Ioc.Resolve<ICommand>($"Commands.{commandNames[0]}");
+
+                var commands = commandNames
+                    .Where(name => !string.IsNullOrWhiteSpace(name))
+                    .Select(name => Ioc.Resolve<ICommand>($"Commands.{name}"))
+                    .ToArray();
+                return new MacroCommand(commands);
+            }
+
+            if (args[0] is ICommand[] commandArray)
+            {
+                if (commandArray.Length == 1)
+                    return commandArray[0];
+                return new MacroCommand(commandArray);
+            }
+
+            var cmds = args.Cast<ICommand>().ToArray();
+            if (cmds.Length == 1)
+                return cmds[0];
+            return new MacroCommand(cmds);
+        }
+    }
+}
