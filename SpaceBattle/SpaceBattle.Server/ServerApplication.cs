@@ -5,7 +5,7 @@ namespace SpaceBattle.Server;
 
 public class ServerApplication
 {
-    public static WebApplication Create(ServerOptions options, GameEndpoint endpoint, Matchmaker? matchmaking = null)
+    public static WebApplication Create(ServerOptions options, GameEndpoint endpoint, Matchmaker? matchmaking = null, MatchResults? results = null)
     {
         options.Validate();
         ArgumentNullException.ThrowIfNull(endpoint);
@@ -18,6 +18,7 @@ public class ServerApplication
         });
         var app = builder.Build();
         if (matchmaking != null) MatchmakingEndpoints.Map(app, matchmaking);
+        if (results != null) MatchResultEndpoints.Map(app, results);
         app.MapPost("/commands", (GameMessage message) =>
         {
             var result = endpoint.Accept(message);

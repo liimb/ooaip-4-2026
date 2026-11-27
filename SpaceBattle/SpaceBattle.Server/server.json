@@ -11,6 +11,17 @@
     "SlowCommandMilliseconds": 100
   },
   "MaxGames": 1024,
+  "Results": {
+    "StoragePath": "snapshots/matches.json",
+    "RecordHistory": true,
+    "RecordReplays": true,
+    "ReplayVersion": 1,
+    "MaxReplayBytes": 16777216,
+    "MaxCommands": 100000,
+    "VerificationTimeoutMilliseconds": 10000,
+    "MatchDurationTicks": 0,
+    "RatingK": 32
+  },
   "Matchmaking": {
     "InitialRatingRange": 100,
     "ExpansionIntervalMilliseconds": 30000,

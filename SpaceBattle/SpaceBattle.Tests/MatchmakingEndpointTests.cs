@@ -94,9 +94,10 @@ public class MatchmakingEndpointTests
             await manager.RestartAsync();
             Assert.Equal(found.Match, manager.Server.Matchmaking.Status(first.PlayerId).Match!.Match);
             Assert.Throws<InvalidOperationException>(() => manager.Server.Matchmaking.Join(first.PlayerId, 1000));
+            await manager.Server.FinishMatchAsync(found.Match.Id);
             var snapshot = await manager.Server.SnapshotAsync(found.Match.Id);
             await manager.HardStopAsync();
-            await new SnapshotStore(path).SaveAsync(new[] { snapshot with { Finished = true } });
+            await new SnapshotStore(path).SaveAsync(new[] { snapshot });
             await manager.StartAsync();
             Assert.Equal(SearchState.NotSearching, manager.Server.Matchmaking.Status(first.PlayerId).State);
             Assert.NotNull(manager.Server.Matchmaking.Join(first.PlayerId, 1000));

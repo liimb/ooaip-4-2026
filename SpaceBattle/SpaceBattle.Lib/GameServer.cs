@@ -13,11 +13,12 @@ public class GameServer
     private readonly GameScheduler[] _schedulers;
     private readonly ConcurrentDictionary<Guid, Game> _games = new();
     private readonly ConcurrentDictionary<Guid, GameWorld> _worlds = new();
+    private readonly ConcurrentDictionary<Guid, MatchSession> _sessions = new();
     private readonly Action<GameDiagnostic> _diagnostics;
     private readonly TimeProvider _clock;
     private bool _stopped;
 
-    public GameServer(ServerOptions options, Action<GameDiagnostic>? diagnostics = null, TimeProvider? clock = null)
+    public GameServer(ServerOptions options, Action<GameDiagnostic>? diagnostics = null, TimeProvider? clock = null, IRatingPolicy? ratingPolicy = null)
     {
         ArgumentNullException.ThrowIfNull(options);
         options.Validate();
@@ -26,12 +27,15 @@ public class GameServer
         _clock = clock ?? TimeProvider.System;
         _pool = new WorkerPool(options.Workers);
         _schedulers = _pool.Workers.Select(worker => new GameScheduler(worker)).ToArray();
+        Results = new MatchResults(options.Results, ratingPolicy ?? new EloRatingPolicy(options.Results.RatingK,
+            options.Matchmaking.MinRating, options.Matchmaking.MaxRating));
         Matchmaking = new Matchmaker(this, options.Matchmaking, _clock);
     }
 
     public Dispatcher Dispatcher { get; } = new();
     public int WorkerCount => _pool.Workers.Count;
     public Matchmaker Matchmaking { get; }
+    public MatchResults Results { get; }
 
     public Game CreateGame(Guid gameId, Action<GameScope>? configure = null)
     {
@@ -116,10 +120,11 @@ public class GameServer
         MatchSession? session = null;
         var game = CreateWorldCore(snapshot, (scope, world) =>
         {
-            session = new MatchSession(snapshot, world, _options.Gameplay);
+            session = new MatchSession(snapshot, world, snapshot.Progress?.Rules ?? _options.Gameplay, Results, _options.Results, _clock);
             scope.Register("Match.Definition", _ => snapshot.Match!);
         });
         session!.Game = game;
+        _sessions[snapshot.GameId] = session;
         return session;
     }
 
@@ -133,7 +138,7 @@ public class GameServer
             GameWorld? world = null;
             var game = CreateGame(snapshot.GameId, scope =>
             {
-                world = new GameWorld(snapshot, _options.Gameplay, () => _games[snapshot.GameId].AssertContext());
+                world = new GameWorld(snapshot, snapshot.Progress?.Rules ?? _options.Gameplay, () => _games[snapshot.GameId].AssertContext());
                 scope.Register("World.Command", args => world.Command((WorldOrder)args[0]));
                 scope.Register("Game.Operations.Shooting", args => world.Shooting((IShootable)args[0]));
                 scope.Register("Game.Registry.Get", args => world.MovingObject((Guid)args[0]));
@@ -149,13 +154,61 @@ public class GameServer
         ["World"] = args => Ioc.Resolve<ICommand>("World.Command", args.Deserialize<WorldOrder>(new JsonSerializerOptions(JsonSerializerDefaults.Web)) ?? throw new ArgumentException("Order is required."))
     });
 
-    public Task<WorldSnapshot> SnapshotAsync(Guid id, CancellationToken cancellationToken = default) =>
-        InvokeAsync(id, () => _worlds[id].Snapshot(), cancellationToken);
+    public async Task<WorldSnapshot> SnapshotAsync(Guid id, CancellationToken cancellationToken = default)
+    {
+        if (Results.Committed(id) is { } result)
+            return result.Final with { Objects = result.Final.Objects.ToArray() };
+        return await InvokeAsync(id, () => _sessions.TryGetValue(id, out var session) ? session.Snapshot() : _worlds[id].Snapshot(), cancellationToken);
+    }
+
+    public async Task<MatchResult?> FinishMatchAsync(Guid id, MatchEndReason reason = MatchEndReason.Interrupted,
+        Guid? playerId = null, CancellationToken token = default)
+    {
+        if (Results.Committed(id) is { } committed) return await Results.GetAsync(committed.MatchId, token);
+        await InvokeAsync(id, () =>
+        {
+            if (!_sessions.TryGetValue(id, out var session)) throw new ArgumentException("Game is not a match.");
+            if (session.Outcome == null) _worlds[id].Command(new WorldOrder("Finish", Reason: reason, PlayerId: playerId)).Execute();
+            return true;
+        }, token);
+        await Results.FlushAsync(token);
+        await RetireCompletedMatchesAsync(token);
+        return await Results.GetAsync(id, token);
+    }
+
+    internal async Task RetireCompletedMatchesAsync(CancellationToken token = default)
+    {
+        using var deadline = CancellationTokenSource.CreateLinkedTokenSource(token);
+        deadline.CancelAfter(_options.Lifecycle.TimeoutMilliseconds);
+        foreach (var session in _sessions.Values.Where(session => session.IsCommitted))
+        {
+            while (!await Dispatcher.Retire(session.Definition.Id).WaitAsync(deadline.Token))
+                await Task.Delay(1, deadline.Token);
+            lock (_lifecycle)
+            {
+                _sessions.TryRemove(session.Definition.Id, out _);
+                _worlds.TryRemove(session.Definition.Id, out _);
+                _games.TryRemove(session.Definition.Id, out _);
+            }
+        }
+    }
+
+    internal void ReportResultFailure(Exception error)
+    {
+        try { _diagnostics(new GameDiagnostic(Guid.Empty, "ResultSaveFailed", TimeSpan.Zero, error)); }
+        catch (Exception reportingError) { Trace.TraceError(reportingError.ToString()); }
+    }
+
+    public async Task FinishMatchesAsync(MatchEndReason reason, CancellationToken token = default)
+    {
+        foreach (var id in _sessions.Keys) await FinishMatchAsync(id, reason, token: token);
+    }
 
     public async Task<WorldSnapshot[]> SnapshotAllAsync(CancellationToken cancellationToken = default)
     {
         var snapshots = new List<WorldSnapshot>();
-        foreach (var id in _worlds.Keys) snapshots.Add(await SnapshotAsync(id, cancellationToken));
+        foreach (var id in _worlds.Keys)
+            if (!Results.IsCommitted(id)) snapshots.Add(await SnapshotAsync(id, cancellationToken));
         return snapshots.ToArray();
     }
 
@@ -205,7 +258,7 @@ public class GameServer
         return await completion.Task.WaitAsync(deadline.Token);
     }
 
-    private class ServiceCommand(Action action) : ICommand
+    internal class ServiceCommand(Action action) : ICommand
     {
         public void Execute() => action();
     }

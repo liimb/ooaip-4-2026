@@ -12,6 +12,7 @@ public class ServerOptions
     public GameplayOptions Gameplay { get; init; } = new();
     public LifecycleOptions Lifecycle { get; init; } = new();
     public MatchmakingOptions Matchmaking { get; init; } = new();
+    public MatchResultsOptions Results { get; init; } = new();
 
     public void Validate()
     {
@@ -27,6 +28,10 @@ public class ServerOptions
         Lifecycle.Validate();
         ArgumentNullException.ThrowIfNull(Matchmaking);
         Matchmaking.Validate();
+        ArgumentNullException.ThrowIfNull(Results);
+        Results.Validate();
+        if (string.Equals(Path.GetFullPath(Results.StoragePath), Path.GetFullPath(Lifecycle.SnapshotPath), StringComparison.OrdinalIgnoreCase))
+            throw new ArgumentException("Match archive and server snapshots require different paths.");
         if (Matchmaking.InitialShipFuel > Gameplay.MaxFuel || Gameplay.MaxObjects < 2)
             throw new ArgumentException("Gameplay limits do not allow initializing a match.");
         if (MaxGames <= 0) throw new ArgumentOutOfRangeException(nameof(MaxGames));
