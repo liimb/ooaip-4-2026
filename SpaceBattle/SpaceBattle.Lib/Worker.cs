@@ -12,10 +12,16 @@ public class Worker : ICommandReceiver
     private readonly object _lifecycle = new();
     private readonly Action<ICommand, Exception> _onError;
     private bool _started;
-    public Worker(int id, int capacity, Action<ICommand, Exception>? onError = null)
+    private readonly int _incomingBatchSize;
+    internal Func<bool>? RunScheduled { get; set; }
+
+    public Worker(int id, int capacity, Action<ICommand, Exception>? onError = null, int incomingBatchSize = 32)
     {
         if (capacity <= 0)
             throw new ArgumentOutOfRangeException(nameof(capacity));
+        if (incomingBatchSize <= 0)
+            throw new ArgumentOutOfRangeException(nameof(incomingBatchSize));
+        _incomingBatchSize = incomingBatchSize;
         Id = id;
         _onError = onError ?? ((_, error) => Trace.TraceError(error.ToString()));
         _inbox = Channel.CreateBounded<ICommand>(new BoundedChannelOptions(capacity) { SingleReader = true, SingleWriter = false, FullMode = BoundedChannelFullMode.Wait, AllowSynchronousContinuations = false });
@@ -82,9 +88,9 @@ public class Worker : ICommandReceiver
         new InitCommand().Execute();
         var initialScope = Ioc.Resolve<object>("IoC.Scope.Current");
         var restore = Ioc.Resolve<ICommand>("IoC.Scope.Current.Set", initialScope);
-        while (_inbox.Reader.WaitToReadAsync().AsTask().GetAwaiter().GetResult())
+        while (true)
         {
-            while (_inbox.Reader.TryRead(out var command))
+            for (var count = 0; count < _incomingBatchSize && _inbox.Reader.TryRead(out var command); count++)
             {
                 try
                 {
@@ -106,6 +112,10 @@ public class Worker : ICommandReceiver
                     restore.Execute();
                 }
             }
+            if (RunScheduled?.Invoke() == true)
+                continue;
+            if (!_inbox.Reader.WaitToReadAsync().AsTask().GetAwaiter().GetResult())
+                break;
         }
     }
 }

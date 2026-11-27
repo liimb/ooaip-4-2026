@@ -1,68 +1,41 @@
-using System;
-using System.Collections.Generic;
-using App;
+﻿using App;
 using App.Scopes;
 using SpaceBattle.Lib;
-using Xunit;
 
-namespace SpaceBattle.Tests
+namespace SpaceBattle.Tests;
+
+public class RegisterIoCDependencyGameTests
 {
-    public class RegisterIoCDependencyGameTests
+    [Fact]
+    public void RegisterIoCDependencyGameCommand_RegistersAllDependencies()
     {
-        [Fact]
-        public void RegisterIoCDependencyGameCommand_RegistersAllDependencies()
+        var scope = new GameScope();
+        var server = new GameServer(new ServerOptions());
+        try
         {
-            new InitCommand().Execute();
-
-            var iocScope = Ioc.Resolve<object>("IoC.Scope.Create");
-            Ioc.Resolve<ICommand>(
-                "IoC.Scope.Current.Set",
-                iocScope
-            ).Execute();
-
-            var testScope = new object();
-
-            try
-            {
-                Ioc.Resolve<ICommand>(
-                    "IoC.Register",
-                    "Scopes.Create",
-                    (Func<object[], object>)(_ => testScope)
-                ).Execute();
-            }
-            catch (ArgumentException)
-            {
-            }
-
+            var activation = scope.Activate();
             try
             {
                 new RegisterIoCDependencyGameCommand().Execute();
+                var gameId = Guid.NewGuid();
+                var game = Ioc.Resolve<Game>("Game.Create", gameId, server);
+                Assert.Equal(gameId, game.Id);
+                Assert.Equal(GameState.Created, game.State);
+                var command = new Moq.Mock<ICommand>();
+                Assert.Equal(DispatchResult.Accepted, server.Dispatcher.Dispatch(gameId, command.Object));
+                server.Stop();
+                command.Verify(item => item.Execute(), Moq.Times.Once);
+                Assert.Equal(GameState.Completed, game.State);
             }
-            catch (ArgumentException)
+            finally
             {
+                activation.Restore();
             }
-
-            var canContinue = Ioc.Resolve<bool>(
-                "Game.Scheduler.CanContinue"
-            );
-
-            Assert.False(canContinue);
-
-            var take = Ioc.Resolve<object>(
-                "Game.Scheduler.Take"
-            );
-
-            Assert.Null(take);
-
-            var gameId = Guid.NewGuid();
-
-            var game = Ioc.Resolve<Game>(
-                "Game.Create",
-                gameId
-            );
-
-            Assert.NotNull(game);
-            Assert.IsType<Game>(game);
+        }
+        finally
+        {
+            server.Stop();
+            scope.Close();
         }
     }
 }

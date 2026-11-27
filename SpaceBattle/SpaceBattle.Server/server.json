@@ -1,0 +1,18 @@
+{
+  "Workers": {
+    "WorkerCount": 2,
+    "QueueCapacity": 256,
+    "IncomingBatchSize": 32
+  },
+  "Games": {
+    "QueueCapacity": 256,
+    "QuantumMilliseconds": 10,
+    "MaxCommandsPerQuantum": 64,
+    "SlowCommandMilliseconds": 100
+  },
+  "MaxGames": 1024,
+  "Endpoint": {
+    "Url": "http://127.0.0.1:5080",
+    "MaxRequestBytes": 16384
+  }
+}

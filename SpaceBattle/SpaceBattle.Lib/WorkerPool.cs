@@ -10,7 +10,7 @@ public class WorkerPool
     {
         ArgumentNullException.ThrowIfNull(options);
         options.Validate();
-        Workers = Array.AsReadOnly(Enumerable.Range(0, options.WorkerCount).Select(id => new Worker(id, options.QueueCapacity, onError)).ToArray());
+        Workers = Array.AsReadOnly(Enumerable.Range(0, options.WorkerCount).Select(id => new Worker(id, options.QueueCapacity, onError, options.IncomingBatchSize)).ToArray());
     }
 
     public void Start()
@@ -31,6 +31,7 @@ public class WorkerPool
         if (Workers.Any(worker => worker.IsCurrentThread))
             throw new InvalidOperationException("Stop the pool from its controlling thread.");
         Complete();
+        Start();
         foreach (var worker in Workers)
             worker.Stop();
     }
