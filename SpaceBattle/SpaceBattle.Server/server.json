@@ -11,6 +11,23 @@
     "SlowCommandMilliseconds": 100
   },
   "MaxGames": 1024,
+  "Matchmaking": {
+    "InitialRatingRange": 100,
+    "ExpansionIntervalMilliseconds": 30000,
+    "RatingRangeStep": 50,
+    "MaxRatingRange": 1000,
+    "MinRating": 0,
+    "MaxRating": 5000,
+    "BotWaitMilliseconds": 120000,
+    "AllowDuelBots": true,
+    "DuelEnabled": true,
+    "TrainingEnabled": true,
+    "QueueCapacity": 2048,
+    "PollIntervalMilliseconds": 100,
+    "InitialShipFuel": 100,
+    "InitialShipRockets": 5,
+    "SpawnDistance": 30
+  },
   "Gameplay": {
     "MoveFuel": 1,
     "RotateFuel": 1,

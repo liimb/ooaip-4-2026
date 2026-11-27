@@ -45,7 +45,7 @@ public class ServerManager
             var snapshots = _options.Lifecycle.RestoreOnStart && File.Exists(_options.Lifecycle.SnapshotPath)
                 ? await _store.LoadAsync(token) : _initial;
             foreach (var snapshot in snapshots) server.CreateWorld(snapshot);
-            host = ServerApplication.Create(_options, server.CreateGameplayEndpoint());
+            host = ServerApplication.Create(_options, server.CreateGameplayEndpoint(), server.Matchmaking);
             server.Start();
             await host.StartAsync(token);
             _host = host;
@@ -85,6 +85,7 @@ public class ServerManager
     {
         _state = ServerState.Stopping;
         var server = Server;
+        await server.Matchmaking.StopAsync();
         server.Freeze();
         try
         {

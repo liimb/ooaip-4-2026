@@ -6,7 +6,7 @@ namespace SpaceBattle.Lib;
 public record ObjectState(Guid Id, string Kind, int X, int Y, int Direction = 0, int Speed = 1,
     int Fuel = 100, int Rockets = 5, bool Engine = false, int Rotation = 0, int Lifetime = 100,
     Guid? Owner = null);
-public record WorldSnapshot(int Version, Guid GameId, long Tick, bool Finished, ObjectState[] Objects);
+public record WorldSnapshot(int Version, Guid GameId, long Tick, bool Finished, ObjectState[] Objects, MatchDefinition? Match = null);
 public record WorldOrder(string Operation, Guid ObjectId = default, Guid TargetId = default,
     int Amount = 0, ObjectState? Object = null);
 
@@ -18,6 +18,7 @@ public class GameWorld
     private readonly IDictionary<(string, string), CollisionTree> _collisions;
     private long _tick;
     private bool _finished;
+    private readonly MatchDefinition? _match;
     public Guid Id { get; }
 
     public GameWorld(WorldSnapshot snapshot, GameplayOptions rules, Action assertContext)
@@ -29,6 +30,7 @@ public class GameWorld
         _assertContext = assertContext;
         _tick = snapshot.Tick;
         _finished = snapshot.Finished;
+        _match = snapshot.Match;
         _objects = snapshot.Objects.ToDictionary(item => item.Id, item => new Body(item));
         var offsets = from x in Enumerable.Range(-1, 3)
                       from y in Enumerable.Range(-1, 3)
@@ -39,7 +41,7 @@ public class GameWorld
     public WorldSnapshot Snapshot()
     {
         _assertContext();
-        return new WorldSnapshot(1, Id, _tick, _finished, _objects.Values.Select(item => item.Export()).ToArray());
+        return new WorldSnapshot(1, Id, _tick, _finished, _objects.Values.Select(item => item.Export()).ToArray(), _match);
     }
 
     public ICommand Command(WorldOrder order) => new WorldCommand(this, order);
@@ -161,10 +163,18 @@ public class GameWorld
     {
         if (snapshot == null || snapshot.Version != 1 || snapshot.GameId == Guid.Empty || snapshot.Tick < 0 || snapshot.Objects == null)
             throw new ArgumentException("Invalid snapshot or unsupported version.");
+        if (snapshot.Match is { } match && (match.Id != snapshot.GameId || !Enum.IsDefined(match.Kind) ||
+            match.First == null || match.Second == null || match.First.Id == Guid.Empty || match.Second.Id == Guid.Empty ||
+            match.First.Id == match.Second.Id || match.First.ShipId == Guid.Empty || match.Second.ShipId == Guid.Empty ||
+            match.First.ShipId == match.Second.ShipId || match.First.IsBot || match.Kind == MatchKind.Training && !match.Second.IsBot))
+            throw new ArgumentException("Invalid match participants.");
         if (snapshot.Objects.Any(item => item == null || item.Id == Guid.Empty || item.Kind is not ("Ship" or "Tanker" or "Rocket" or "Meteor" or "Bonus") ||
             item.Fuel < 0 || item.Rockets < 0 || item.Speed < 0 || item.Speed > 1000 || item.Lifetime <= 0 || item.Rotation < -1 || item.Rotation > 1 || item.Direction < 0 || item.Direction > 7) ||
             snapshot.Objects.Select(item => item.Id).Distinct().Count() != snapshot.Objects.Length)
             throw new ArgumentException("Invalid game objects in snapshot.");
+        if (snapshot.Match is { } definition && new[] { definition.First, definition.Second }.Any(player =>
+            snapshot.Objects.Any(item => item.Id == player.ShipId && (item.Kind != "Ship" || item.Owner != player.Id))))
+            throw new ArgumentException("Match ships must belong to their participants.");
     }
 
     private class WorldCommand(GameWorld world, WorldOrder order) : ICommand
