@@ -4,6 +4,7 @@ public class Angle
 {
     private static int _denominator = 8;
     private readonly int _numerator;
+    public int Steps => _numerator;
 
     public Angle(int numerator)
     {
