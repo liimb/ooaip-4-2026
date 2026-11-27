@@ -9,7 +9,7 @@ using Moq;
 
 namespace SpaceBattle.Tests;
 
-public class AutoRegistrarTests : IDisposable
+public class AutoRegistrarTests : IAsyncLifetime
 {
     private readonly ICommand _restoreScope;
 
@@ -32,9 +32,12 @@ public class AutoRegistrarTests : IDisposable
         }
     }
 
-    public void Dispose()
+    public Task InitializeAsync() => Task.CompletedTask;
+
+    public Task DisposeAsync()
     {
         _restoreScope.Execute();
+        return Task.CompletedTask;
     }
 
     [Fact]
@@ -275,6 +278,33 @@ public class AutoRegistrarTests : IDisposable
     {
         var scope = Ioc.Resolve<object>("IoC.Scope.Create");
         Ioc.Resolve<ICommand>("IoC.Scope.Current.Set", scope).Execute();
+    }
+
+    [Fact]
+    public void GeneratedCommandFactoryDoesNotWrapErrorsInReflectionExceptions()
+    {
+        Assert.Throws<ArgumentException>(() => Ioc.Resolve<ICommand>("Commands.Move"));
+    }
+
+    [Fact]
+    public void GeneratedFactoriesCreateNewCommandsAndAdaptersOnEveryResolution()
+    {
+        var data = new Dictionary<string, object>
+        {
+            ["Position"] = new Vector(new[] { 0, 0 }),
+            ["Velocity"] = new Vector(new[] { 1, 0 })
+        };
+
+        var firstCommand = Ioc.Resolve<ICommand>("Commands.Move", data);
+        var secondCommand = Ioc.Resolve<ICommand>("Commands.Move", data);
+        var firstAdapter = Ioc.Resolve<IMovingObject>("Adapters.IMovingObject", data);
+        var secondAdapter = Ioc.Resolve<IMovingObject>("Adapters.IMovingObject", data);
+
+        Assert.NotSame(firstCommand, secondCommand);
+        Assert.NotSame(firstAdapter, secondAdapter);
+        firstCommand.Execute();
+        secondCommand.Execute();
+        Assert.Equal(new Vector(new[] { 2, 0 }), data["Position"]);
     }
 
     [Fact]

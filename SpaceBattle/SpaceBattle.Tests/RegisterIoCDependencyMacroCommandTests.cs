@@ -8,7 +8,7 @@ using Xunit;
 
 namespace SpaceBattle.Tests;
 
-public class RegisterIoCDependencyMacroCommandTests : IDisposable
+public class RegisterIoCDependencyMacroCommandTests : IAsyncLifetime
 {
     private readonly ICommand _restoreScope;
 
@@ -35,7 +35,13 @@ public class RegisterIoCDependencyMacroCommandTests : IDisposable
         }
     }
 
-    public void Dispose() => _restoreScope.Execute();
+    public Task InitializeAsync() => Task.CompletedTask;
+
+    public Task DisposeAsync()
+    {
+        _restoreScope.Execute();
+        return Task.CompletedTask;
+    }
 
     [Fact]
     public void RegisterMacroCommand_RepeatedRegistration_PreservesExistingFactory()

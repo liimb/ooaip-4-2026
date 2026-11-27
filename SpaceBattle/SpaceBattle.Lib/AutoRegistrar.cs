@@ -21,8 +21,11 @@ public static class AutoRegistrar
     private const string CommandTemplateResource =
         "SpaceBattle.Lib.Templates.CommandTemplate.txt";
 
-    private static readonly ConcurrentDictionary<Type, Func<object, object>>
+    private static readonly ConcurrentDictionary<Type, Lazy<Func<object, object>>>
         AdapterFactories = new();
+
+    private static readonly ConcurrentDictionary<Type, Lazy<Func<object[], object>>> CommandFactories = new();
+    private static readonly Lazy<Func<object[], object>> MacroFactory = new(CreateCommandFactory);
 
     private static readonly ConditionalWeakTable<object, HashSet<string>> Registrations = new();
 
@@ -104,7 +107,7 @@ public static class AutoRegistrar
     {
         var factory = AdapterFactories.GetOrAdd(
             interfaceType,
-            CreateAdapterFactoryDelegate);
+            type => new Lazy<Func<object, object>>(() => CreateAdapterFactoryDelegate(type))).Value;
 
         Func<object[], object> adapterFactory = args =>
         {
@@ -164,8 +167,7 @@ public static class AutoRegistrar
 
         var createMethod = GetCreateMethod(factoryType);
 
-        return entity =>
-            createMethod.Invoke(null, new[] { entity })!;
+        return createMethod.CreateDelegate<Func<object, object>>();
     }
 
     private static void RegisterCommands(Assembly assembly)
@@ -217,6 +219,15 @@ public static class AutoRegistrar
         int index)
     {
         var commandName = GetDependencyTypeName(commandType);
+        var factory = CommandFactories.GetOrAdd(commandType,
+            _ => new Lazy<Func<object[], object>>(() => CreateGeneratedCommandFactory(commandType, interfaceType, index))).Value;
+
+        Register($"Commands.{commandName}", factory);
+        Register($"Commands.{commandType.Name[..^"Command".Length]}", factory);
+    }
+
+    private static Func<object[], object> CreateGeneratedCommandFactory(Type commandType, Type interfaceType, int index)
+    {
         var adapterName = GetAdapterDependencyName(interfaceType);
         var factoryTypeName = $"GeneratedCommandFactory{index}";
 
@@ -236,19 +247,7 @@ public static class AutoRegistrar
 
         var createMethod = GetCreateMethod(factoryType);
 
-        Func<object[], object> factory = args =>
-            createMethod.Invoke(null, new object[] { args })!;
-
-        Register(
-            $"Commands.{commandName}",
-            factory);
-
-        var shortName = commandType.Name[
-            ..^"Command".Length];
-
-        Register(
-            $"Commands.{shortName}",
-            factory);
+        return createMethod.CreateDelegate<Func<object[], object>>();
     }
 
     private static string GetDependencyTypeName(Type type)
@@ -267,6 +266,11 @@ public static class AutoRegistrar
 
     private static void RegisterCommandFactory()
     {
+        Register("Commands.Factory.Generated", MacroFactory.Value);
+    }
+
+    private static Func<object[], object> CreateCommandFactory()
+    {
         var source = ReadTemplate(CommandFactoryTemplateResource);
 
         var generatedAssembly = CompileSource(
@@ -279,11 +283,7 @@ public static class AutoRegistrar
 
         var createMethod = GetCreateMethod(factoryType);
 
-        Register(
-            "Commands.Factory.Generated",
-            (object[] args) =>
-                createMethod.Invoke(null, new object[] { args })!
-        );
+        return createMethod.CreateDelegate<Func<object[], object>>();
     }
 
     private static string GenerateAdapterSource(Type interfaceType)
