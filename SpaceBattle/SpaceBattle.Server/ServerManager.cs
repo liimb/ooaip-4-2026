@@ -42,10 +42,15 @@ public class ServerManager
         WebApplication? host = null;
         try
         {
+            await server.Results.InitializeAsync(token);
             var snapshots = _options.Lifecycle.RestoreOnStart && File.Exists(_options.Lifecycle.SnapshotPath)
                 ? await _store.LoadAsync(token) : _initial;
-            foreach (var snapshot in snapshots) server.CreateWorld(snapshot);
-            host = ServerApplication.Create(_options, server.CreateGameplayEndpoint(), server.Matchmaking);
+            foreach (var snapshot in snapshots)
+            {
+                if (snapshot.Match != null && await server.Results.GetAsync(snapshot.GameId, token) != null) continue;
+                server.CreateWorld(snapshot);
+            }
+            host = ServerApplication.Create(_options, server.CreateGameplayEndpoint(), server.Matchmaking, server.Results);
             server.Start();
             await host.StartAsync(token);
             _host = host;
@@ -89,8 +94,10 @@ public class ServerManager
         server.Freeze();
         try
         {
+            if (hard) await server.FinishMatchesAsync(MatchEndReason.Interrupted);
             if (!hard && _options.Lifecycle.SaveOnSoftStop)
                 await _store.SaveAsync(await server.SnapshotAllAsync());
+            await server.Results.FlushAsync();
         }
         finally
         {

@@ -1,4 +1,6 @@
 using System.Text.Json;
+using System.Security.Cryptography;
+using System.Buffers.Binary;
 using App;
 
 namespace SpaceBattle.Lib;
@@ -6,31 +8,38 @@ namespace SpaceBattle.Lib;
 public record ObjectState(Guid Id, string Kind, int X, int Y, int Direction = 0, int Speed = 1,
     int Fuel = 100, int Rockets = 5, bool Engine = false, int Rotation = 0, int Lifetime = 100,
     Guid? Owner = null);
-public record WorldSnapshot(int Version, Guid GameId, long Tick, bool Finished, ObjectState[] Objects, MatchDefinition? Match = null);
+public record WorldSnapshot(int Version, Guid GameId, long Tick, bool Finished, ObjectState[] Objects,
+    MatchDefinition? Match = null, long ObjectSequence = 0, MatchProgress? Progress = null);
 public record WorldOrder(string Operation, Guid ObjectId = default, Guid TargetId = default,
-    int Amount = 0, ObjectState? Object = null);
+    int Amount = 0, ObjectState? Object = null, MatchEndReason? Reason = null, Guid? PlayerId = null);
 
 public class GameWorld
 {
     private readonly Dictionary<Guid, Body> _objects;
     private readonly GameplayOptions _rules;
     private readonly Action _assertContext;
+    private readonly CancellationToken _executionToken;
     private readonly IDictionary<(string, string), CollisionTree> _collisions;
     private long _tick;
     private bool _finished;
     private readonly MatchDefinition? _match;
+    private long _objectSequence;
+    internal Action<WorldOrder>? BeforeOrder { get; set; }
+    internal Action<WorldOrder, long, Exception?>? AfterOrder { get; set; }
     public Guid Id { get; }
 
-    public GameWorld(WorldSnapshot snapshot, GameplayOptions rules, Action assertContext)
+    public GameWorld(WorldSnapshot snapshot, GameplayOptions rules, Action assertContext, CancellationToken executionToken = default)
     {
         Validate(snapshot);
         rules.Validate();
         Id = snapshot.GameId;
         _rules = rules;
         _assertContext = assertContext;
+        _executionToken = executionToken;
         _tick = snapshot.Tick;
         _finished = snapshot.Finished;
         _match = snapshot.Match;
+        _objectSequence = snapshot.ObjectSequence;
         _objects = snapshot.Objects.ToDictionary(item => item.Id, item => new Body(item));
         var offsets = from x in Enumerable.Range(-1, 3)
                       from y in Enumerable.Range(-1, 3)
@@ -41,16 +50,36 @@ public class GameWorld
     public WorldSnapshot Snapshot()
     {
         _assertContext();
-        return new WorldSnapshot(1, Id, _tick, _finished, _objects.Values.Select(item => item.Export()).ToArray(), _match);
+        return new WorldSnapshot(1, Id, _tick, _finished, _objects.Values.OrderBy(item => item.Data.Id).Select(item => item.Export()).ToArray(), _match, _objectSequence);
     }
 
     public ICommand Command(WorldOrder order) => new WorldCommand(this, order);
 
+    private void ExecuteOrder(WorldOrder order)
+    {
+        _assertContext();
+        ArgumentNullException.ThrowIfNull(order);
+        BeforeOrder?.Invoke(order);
+        var tick = _tick;
+        Exception? failure = null;
+        try { Apply(order); }
+        catch (Exception error) { failure = error; throw; }
+        finally { AfterOrder?.Invoke(order, tick, failure); }
+    }
+
     private void Apply(WorldOrder order)
     {
         _assertContext();
+        ValidateOrder(order, _match);
         if (_finished) throw new InvalidOperationException("Game is finished.");
-        if (order.Operation == "Finish") { _finished = true; return; }
+        if (order.Operation == "Finish")
+        {
+            if (order.Reason == MatchEndReason.FleetDestroyed && _match != null &&
+                _objects.ContainsKey(_match.First.ShipId) && _objects.ContainsKey(_match.Second.ShipId))
+                throw new InvalidOperationException("Both fleets are still present.");
+            _finished = true;
+            return;
+        }
         if (order.Operation == "Tick") { Tick(); return; }
         if (order.Operation == "Spawn")
         {
@@ -97,12 +126,40 @@ public class GameWorld
             throw new InvalidOperationException("Shooter does not belong to the active game.");
         RequireFuel(body, _rules.ShotFuel);
         if (body.Rockets == 0 || _objects.Count >= _rules.MaxObjects) throw new InvalidOperationException("Cannot launch rocket.");
-        var rocket = new ObjectState(Guid.NewGuid(), "Rocket", body.Position.GetCoordinates()[0], body.Position.GetCoordinates()[1],
+        var rocket = new ObjectState(NextObjectId(), "Rocket", body.Position.GetCoordinates()[0], body.Position.GetCoordinates()[1],
             body.Angle.Steps, _rules.RocketSpeed, 0, 0, true, 0, _rules.RocketLifetime, body.Data.Id);
         _objects.Add(rocket.Id, new Body(rocket));
         body.Fuel -= _rules.ShotFuel;
         body.Rockets--;
     });
+
+    private Guid NextObjectId()
+    {
+        Span<byte> data = stackalloc byte[24];
+        Id.TryWriteBytes(data);
+        Guid id;
+        do
+        {
+            BinaryPrimitives.WriteInt64LittleEndian(data[16..], checked(++_objectSequence));
+            id = new Guid(SHA256.HashData(data).AsSpan(0, 16));
+        } while (_objects.ContainsKey(id));
+        return id;
+    }
+
+    public static void ValidateOrder(WorldOrder order, MatchDefinition? match)
+    {
+        if (order == null || order.Operation is not ("Finish" or "Tick" or "Spawn" or "EngineOn" or "EngineOff" or
+            "Clockwise" or "Counterclockwise" or "StopRotation" or "Refuel" or "TransferFuel" or "Shoot"))
+            throw new ArgumentException("Unknown gameplay operation.");
+        if (order.Reason.HasValue && (!Enum.IsDefined(order.Reason.Value) || order.Operation != "Finish"))
+            throw new ArgumentException("Invalid termination reason.");
+        if (order.Object != null && order.Operation != "Spawn")
+            throw new ArgumentException("An object definition is only valid for spawning.");
+        if (order.PlayerId.HasValue && (match == null || order.PlayerId != match.First.Id && order.PlayerId != match.Second.Id))
+            throw new ArgumentException("Player does not belong to the match.");
+        if (order.Reason is MatchEndReason.PlayerLeft or MatchEndReason.Disconnected && !order.PlayerId.HasValue)
+            throw new ArgumentException("Departing player is required.");
+    }
 
     internal IMovingObject MovingObject(Guid id)
     {
@@ -116,10 +173,11 @@ public class GameWorld
     }
     private void Tick()
     {
-        _tick++;
+        _tick = checked(_tick + 1);
         var removed = new HashSet<Guid>();
-        foreach (var body in _objects.Values)
+        foreach (var body in _objects.Values.OrderBy(item => item.Data.Id))
         {
+            _executionToken.ThrowIfCancellationRequested();
             var ship = body.Data.Kind is "Ship" or "Tanker";
             var cost = ship ? (body.Engine ? (long)_rules.MoveFuel : 0) + (body.Rotation != 0 ? _rules.RotateFuel : 0) : 0;
             if (body.Fuel < cost) { body.Engine = false; body.Rotation = 0; continue; }
@@ -133,10 +191,11 @@ public class GameWorld
             if (ship && body.Fuel == 0) { body.Engine = false; body.Rotation = 0; }
             if (body.Data.Kind == "Rocket" && --body.Lifetime <= 0) removed.Add(body.Data.Id);
         }
-        var objects = _objects.Values.ToArray();
+        var objects = _objects.Values.OrderBy(item => item.Data.Id).ToArray();
         for (var i = 0; i < objects.Length; i++)
             for (var j = i + 1; j < objects.Length; j++)
             {
+                if ((j & 255) == 0) _executionToken.ThrowIfCancellationRequested();
                 var a = objects[i]; var b = objects[j];
                 if (removed.Contains(a.Data.Id) || removed.Contains(b.Data.Id) || a.Data.Owner == b.Data.Id || b.Data.Owner == a.Data.Id) continue;
                 var check = new CheckCollisionCommand(a, b, _collisions);
@@ -161,7 +220,7 @@ public class GameWorld
     }
     public static void Validate(WorldSnapshot snapshot)
     {
-        if (snapshot == null || snapshot.Version != 1 || snapshot.GameId == Guid.Empty || snapshot.Tick < 0 || snapshot.Objects == null)
+        if (snapshot == null || snapshot.Version != 1 || snapshot.GameId == Guid.Empty || snapshot.Tick < 0 || snapshot.ObjectSequence < 0 || snapshot.Objects == null)
             throw new ArgumentException("Invalid snapshot or unsupported version.");
         if (snapshot.Match is { } match && (match.Id != snapshot.GameId || !Enum.IsDefined(match.Kind) ||
             match.First == null || match.Second == null || match.First.Id == Guid.Empty || match.Second.Id == Guid.Empty ||
@@ -179,7 +238,7 @@ public class GameWorld
 
     private class WorldCommand(GameWorld world, WorldOrder order) : ICommand
     {
-        public void Execute() => world.Apply(order);
+        public void Execute() => world.ExecuteOrder(order);
     }
     private class Body : IMovingObject, IRotatingObject, ICollisionObject, IShootable
     {

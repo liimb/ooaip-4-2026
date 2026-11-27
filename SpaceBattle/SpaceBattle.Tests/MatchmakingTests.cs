@@ -350,6 +350,7 @@ public class MatchmakingTests
             Assert.Equal(first.PlayerId, outcome!.WinnerId);
             server.Matchmaking.Process();
             Assert.Same(outcome, server.Matchmaking.Outcome(id));
+            await server.Results.FlushAsync();
             Assert.Equal(SearchState.NotSearching, server.Matchmaking.Status(second.PlayerId).State);
             Assert.NotEqual(first.Id, server.Matchmaking.Join(first.PlayerId, 1000).Id);
         }

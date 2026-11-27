@@ -33,6 +33,7 @@ public class Matchmaker
             if (kind == MatchKind.Duel && !_options.DuelEnabled || kind == MatchKind.Training && !_options.TrainingEnabled)
                 throw new InvalidOperationException("Match kind is disabled.");
             ReleaseFinishedPlayers();
+            rating = _server.Results.Rating(playerId, rating);
             if (_searches.ContainsKey(playerId) || _players.ContainsKey(playerId))
                 throw new InvalidOperationException("Player is already searching or playing.");
             if (_searches.Count >= _options.QueueCapacity) throw new InvalidOperationException("Search queue is full.");
@@ -79,6 +80,7 @@ public class Matchmaker
     internal Game Restore(WorldSnapshot snapshot)
     {
         GameWorld.Validate(snapshot);
+        if (_server.Results.IsCommitted(snapshot.GameId)) throw new InvalidOperationException("Match result is already committed.");
         var definition = snapshot.Match!;
         lock (_gate)
         {
@@ -99,7 +101,8 @@ public class Matchmaker
 
     public MatchOutcome? Outcome(Guid matchId)
     {
-        lock (_gate) return _matches.TryGetValue(matchId, out var match) ? match.Outcome : null;
+        lock (_gate) return _matches.TryGetValue(matchId, out var match) ? match.Outcome :
+            _server.Results.Committed(matchId) is { } result ? new MatchOutcome(matchId, result.WinnerId) : null;
     }
 
     public void Process()
@@ -171,11 +174,12 @@ public class Matchmaker
 
     private void ReleaseFinishedPlayers()
     {
-        foreach (var player in _players.Where(pair => pair.Value.Outcome != null).Select(pair => pair.Key).ToArray())
+        foreach (var player in _players.Where(pair => pair.Value.IsCommitted).Select(pair => pair.Key).ToArray())
         {
             _players.Remove(player);
             foreach (var ticket in _tickets.Where(pair => pair.Value == player).Select(pair => pair.Key).ToArray()) _tickets.Remove(ticket);
         }
+        foreach (var id in _matches.Where(pair => pair.Value.IsCommitted).Select(pair => pair.Key).ToArray()) _matches.Remove(id);
     }
 
     internal void Start()
@@ -191,7 +195,16 @@ public class Matchmaker
         using var timer = new PeriodicTimer(TimeSpan.FromMilliseconds(_options.PollIntervalMilliseconds), _clock);
         try
         {
-            while (await timer.WaitForNextTickAsync(_stop.Token)) Process();
+            while (await timer.WaitForNextTickAsync(_stop.Token))
+            {
+                Process();
+                try
+                {
+                    await _server.Results.FlushAsync(_stop.Token);
+                    await _server.RetireCompletedMatchesAsync(_stop.Token);
+                }
+                catch (Exception error) when (!_stop.IsCancellationRequested) { _server.ReportResultFailure(error); }
+            }
         }
         catch (OperationCanceledException) when (_stop.IsCancellationRequested) { }
     }

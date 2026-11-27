@@ -127,7 +127,7 @@ public class Game : ICommand
                 var commandStarted = _clock.GetTimestamp();
                 try
                 {
-                    if (Volatile.Read(ref _cancelRequested) == 0) command.Execute();
+                    if (Volatile.Read(ref _cancelRequested) == 0 || command is GameServer.ServiceCommand) command.Execute();
                 }
                 catch (Exception error) { Report(new GameDiagnostic(Id, "CommandFailed", TimeSpan.Zero, error)); }
                 finally

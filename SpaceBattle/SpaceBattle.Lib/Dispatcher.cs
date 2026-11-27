@@ -93,6 +93,49 @@ public class Dispatcher
         }
     }
 
+    internal Task<bool> Retire(Guid id)
+    {
+        lock (_admission)
+        {
+            if (!_routes.TryGetValue(id, out var route)) return Task.FromResult(true);
+            if (route.Paused) return Task.FromResult(false);
+            if (route.Game.State == GameState.Completed)
+            {
+                route.Game.Close();
+                route.Scheduler.TransferOut();
+                _routes.TryRemove(id, out _);
+                return Task.FromResult(true);
+            }
+            var completion = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+            route.Paused = true;
+            route.Game.ReserveControl();
+            var marker = new GameServer.ServiceCommand(() => route.Game.AfterQuantum = () =>
+            {
+                lock (_admission)
+                {
+                    try
+                    {
+                        route.Game.Close();
+                        route.Scheduler.TransferOut();
+                        _routes.TryRemove(id, out _);
+                        completion.TrySetResult(true);
+                    }
+                    catch (Exception error)
+                    {
+                        route.Paused = false;
+                        completion.TrySetException(error);
+                    }
+                }
+            });
+            if (!route.Scheduler.TrySend(route.Game, marker))
+            {
+                route.Paused = false;
+                completion.TrySetResult(false);
+            }
+            return completion.Task;
+        }
+    }
+
     private class Route(Game game, GameScheduler scheduler)
     {
         public Game Game { get; } = game;
