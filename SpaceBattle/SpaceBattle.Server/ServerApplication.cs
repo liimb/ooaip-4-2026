@@ -5,7 +5,7 @@ namespace SpaceBattle.Server;
 
 public class ServerApplication
 {
-    public static WebApplication Create(ServerOptions options, GameEndpoint endpoint, Matchmaker? matchmaking = null)
+    public static WebApplication Create(ServerOptions options, GameEndpoint endpoint)
     {
         options.Validate();
         ArgumentNullException.ThrowIfNull(endpoint);
@@ -17,7 +17,6 @@ public class ServerApplication
             server.Limits.MaxConcurrentConnections = 128;
         });
         var app = builder.Build();
-        if (matchmaking != null) MatchmakingEndpoints.Map(app, matchmaking);
         app.MapPost("/commands", (GameMessage message) =>
         {
             var result = endpoint.Accept(message);

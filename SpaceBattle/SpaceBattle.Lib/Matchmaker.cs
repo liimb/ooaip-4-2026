@@ -23,7 +23,7 @@ public class Matchmaker
         _clock = clock;
     }
 
-    public SearchTicket Join(Guid playerId, int rating, MatchKind kind = MatchKind.Duel)
+    internal SearchTicket Join(Guid playerId, int rating, MatchKind kind)
     {
         if (playerId == Guid.Empty || rating < _options.MinRating || rating > _options.MaxRating || !Enum.IsDefined(kind))
             throw new ArgumentException("Invalid player, rating or match kind.");
@@ -42,7 +42,7 @@ public class Matchmaker
         }
     }
 
-    public bool Cancel(Guid playerId, Guid searchId)
+    internal bool Cancel(Guid playerId, Guid searchId)
     {
         lock (_gate)
         {
@@ -53,7 +53,7 @@ public class Matchmaker
         }
     }
 
-    public SearchStatus Status(Guid playerId)
+    internal SearchStatus Status(Guid playerId)
     {
         lock (_gate)
         {
@@ -65,7 +65,7 @@ public class Matchmaker
         }
     }
 
-    public Task<MatchFound> WaitAsync(Guid playerId, Guid searchId, CancellationToken token = default)
+    internal Task<MatchFound> WaitAsync(Guid playerId, Guid searchId, CancellationToken token)
     {
         lock (_gate)
         {
@@ -97,7 +97,7 @@ public class Matchmaker
         }
     }
 
-    public MatchOutcome? Outcome(Guid matchId)
+    internal MatchOutcome? Outcome(Guid matchId)
     {
         lock (_gate) return _matches.TryGetValue(matchId, out var match) ? match.Outcome : null;
     }

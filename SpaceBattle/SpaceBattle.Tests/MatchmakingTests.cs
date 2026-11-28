@@ -19,20 +19,20 @@ public class MatchmakingTests
         var player = Guid.NewGuid();
         try
         {
-            Assert.Equal(SearchState.NotSearching, server.Matchmaking.Status(player).State);
-            var ticket = server.Matchmaking.Join(player, 1200);
-            Assert.Equal(SearchState.Searching, server.Matchmaking.Status(player).State);
+            Assert.Equal(SearchState.NotSearching, Execute(new GetMatchmakingStatusCommand(server.Matchmaking, player)).State);
+            var ticket = Execute(new JoinMatchmakingCommand(server.Matchmaking, player, 1200));
+            Assert.Equal(SearchState.Searching, Execute(new GetMatchmakingStatusCommand(server.Matchmaking, player)).State);
             Assert.False(ticket.WaitAsync().IsCompleted);
-            Assert.Throws<InvalidOperationException>(() => server.Matchmaking.Join(player, 1200));
-            Assert.Throws<InvalidOperationException>(() => server.Matchmaking.Join(player, 1200, MatchKind.Training));
-            Assert.True(server.Matchmaking.Cancel(player, ticket.Id));
-            Assert.False(server.Matchmaking.Cancel(player, ticket.Id));
+            Assert.Throws<InvalidOperationException>(() => Execute(new JoinMatchmakingCommand(server.Matchmaking, player, 1200)));
+            Assert.Throws<InvalidOperationException>(() => Execute(new JoinMatchmakingCommand(server.Matchmaking, player, 1200, MatchKind.Training)));
+            Assert.True(Execute(new CancelMatchmakingCommand(server.Matchmaking, player, ticket.Id)));
+            Assert.False(Execute(new CancelMatchmakingCommand(server.Matchmaking, player, ticket.Id)));
             await Assert.ThrowsAnyAsync<OperationCanceledException>(() => ticket.WaitAsync());
-            Assert.Equal(SearchState.NotSearching, server.Matchmaking.Status(player).State);
-            var next = server.Matchmaking.Join(player, 1200);
+            Assert.Equal(SearchState.NotSearching, Execute(new GetMatchmakingStatusCommand(server.Matchmaking, player)).State);
+            var next = Execute(new JoinMatchmakingCommand(server.Matchmaking, player, 1200));
             Assert.NotEqual(ticket.Id, next.Id);
-            Assert.False(server.Matchmaking.Cancel(player, ticket.Id));
-            Assert.Equal(next.Id, server.Matchmaking.Status(player).SearchId);
+            Assert.False(Execute(new CancelMatchmakingCommand(server.Matchmaking, player, ticket.Id)));
+            Assert.Equal(next.Id, Execute(new GetMatchmakingStatusCommand(server.Matchmaking, player)).SearchId);
         }
         finally { server.Stop(); }
     }
@@ -43,9 +43,9 @@ public class MatchmakingTests
         var server = new GameServer(Options());
         try
         {
-            var first = server.Matchmaking.Join(Guid.NewGuid(), 1200);
-            var far = server.Matchmaking.Join(Guid.NewGuid(), 1290);
-            var close = server.Matchmaking.Join(Guid.NewGuid(), 1201);
+            var first = Execute(new JoinMatchmakingCommand(server.Matchmaking, Guid.NewGuid(), 1200));
+            var far = Execute(new JoinMatchmakingCommand(server.Matchmaking, Guid.NewGuid(), 1290));
+            var close = Execute(new JoinMatchmakingCommand(server.Matchmaking, Guid.NewGuid(), 1201));
             server.Matchmaking.Process();
             var match = await first.WaitAsync();
             Assert.Equal(match, await close.WaitAsync());
@@ -54,10 +54,10 @@ public class MatchmakingTests
             Assert.True(match.Match.IsRanked);
             Assert.Equal(MatchKind.Duel, match.Match.Kind);
             Assert.InRange(match.WorkerId, 0, server.WorkerCount - 1);
-            Assert.Equal(SearchState.InGame, server.Matchmaking.Status(first.PlayerId).State);
-            Assert.Throws<InvalidOperationException>(() => server.Matchmaking.Join(first.PlayerId, 1200));
-            Assert.False(server.Matchmaking.Cancel(first.PlayerId, first.Id));
-            Assert.Equal(match, await server.Matchmaking.WaitAsync(first.PlayerId, first.Id));
+            Assert.Equal(SearchState.InGame, Execute(new GetMatchmakingStatusCommand(server.Matchmaking, first.PlayerId)).State);
+            Assert.Throws<InvalidOperationException>(() => Execute(new JoinMatchmakingCommand(server.Matchmaking, first.PlayerId, 1200)));
+            Assert.False(Execute(new CancelMatchmakingCommand(server.Matchmaking, first.PlayerId, first.Id)));
+            Assert.Equal(match, await Execute(new WaitForMatchCommand(server.Matchmaking, first.PlayerId, first.Id)));
             server.Start();
             var snapshot = await server.SnapshotAsync(match.Match.Id);
             Assert.Equal(match.Match, snapshot.Match);
@@ -75,9 +75,9 @@ public class MatchmakingTests
         var server = new GameServer(Options(config), clock: clock);
         try
         {
-            var old = server.Matchmaking.Join(Guid.NewGuid(), 1000);
+            var old = Execute(new JoinMatchmakingCommand(server.Matchmaking, Guid.NewGuid(), 1000));
             clock.Advance(200);
-            var fresh = server.Matchmaking.Join(Guid.NewGuid(), 1030);
+            var fresh = Execute(new JoinMatchmakingCommand(server.Matchmaking, Guid.NewGuid(), 1030));
             server.Matchmaking.Process();
             Assert.False(old.WaitAsync().IsCompleted);
             clock.Advance(199);
@@ -86,8 +86,8 @@ public class MatchmakingTests
             clock.Advance(1);
             server.Matchmaking.Process();
             Assert.Equal(await old.WaitAsync(), await fresh.WaitAsync());
-            var alone = server.Matchmaking.Join(Guid.NewGuid(), 2000);
-            server.Matchmaking.Join(Guid.NewGuid(), 2031);
+            var alone = Execute(new JoinMatchmakingCommand(server.Matchmaking, Guid.NewGuid(), 2000));
+            Execute(new JoinMatchmakingCommand(server.Matchmaking, Guid.NewGuid(), 2031));
             clock.Advance(1000000);
             server.Matchmaking.Process();
             Assert.False(alone.WaitAsync().IsCompleted);
@@ -103,11 +103,11 @@ public class MatchmakingTests
         var server = new GameServer(Options(), clock: clock);
         try
         {
-            var cancelled = server.Matchmaking.Join(Guid.NewGuid(), 1000);
-            var oldest = server.Matchmaking.Join(Guid.NewGuid(), 1000);
-            var next = server.Matchmaking.Join(Guid.NewGuid(), 1000);
-            server.Matchmaking.Cancel(cancelled.PlayerId, cancelled.Id);
-            var rejoined = server.Matchmaking.Join(cancelled.PlayerId, 1000);
+            var cancelled = Execute(new JoinMatchmakingCommand(server.Matchmaking, Guid.NewGuid(), 1000));
+            var oldest = Execute(new JoinMatchmakingCommand(server.Matchmaking, Guid.NewGuid(), 1000));
+            var next = Execute(new JoinMatchmakingCommand(server.Matchmaking, Guid.NewGuid(), 1000));
+            Execute(new CancelMatchmakingCommand(server.Matchmaking, cancelled.PlayerId, cancelled.Id));
+            var rejoined = Execute(new JoinMatchmakingCommand(server.Matchmaking, cancelled.PlayerId, 1000));
             server.Matchmaking.Process();
             var found = await oldest.WaitAsync();
             Assert.Equal(oldest.PlayerId, found.Match.First.Id);
@@ -124,16 +124,16 @@ public class MatchmakingTests
         var restored = new GameServer(Options(maxGames: 1));
         try
         {
-            var ticket = server.Matchmaking.Join(Guid.NewGuid(), 1000, MatchKind.Training);
+            var ticket = Execute(new JoinMatchmakingCommand(server.Matchmaking, Guid.NewGuid(), 1000, MatchKind.Training));
             server.Matchmaking.Process();
             var found = await ticket.WaitAsync();
             server.Start();
             var state = await server.SnapshotAsync(found.Match.Id);
             var invalid = state with { Objects = state.Objects.Select(item => item.Id == found.Match.First.ShipId ? item with { Owner = Guid.NewGuid() } : item).ToArray() };
             Assert.Throws<ArgumentException>(() => restored.CreateWorld(invalid));
-            Assert.Equal(SearchState.NotSearching, restored.Matchmaking.Status(ticket.PlayerId).State);
+            Assert.Equal(SearchState.NotSearching, Execute(new GetMatchmakingStatusCommand(restored.Matchmaking, ticket.PlayerId)).State);
             restored.CreateWorld(state);
-            Assert.Equal(SearchState.InGame, restored.Matchmaking.Status(ticket.PlayerId).State);
+            Assert.Equal(SearchState.InGame, Execute(new GetMatchmakingStatusCommand(restored.Matchmaking, ticket.PlayerId)).State);
         }
         finally { server.Stop(); restored.Stop(); }
     }
@@ -145,7 +145,7 @@ public class MatchmakingTests
         var server = new GameServer(Options(new MatchmakingOptions { BotWaitMilliseconds = 1000, PollIntervalMilliseconds = 60000 }), clock: clock);
         try
         {
-            var ticket = server.Matchmaking.Join(Guid.NewGuid(), 1500);
+            var ticket = Execute(new JoinMatchmakingCommand(server.Matchmaking, Guid.NewGuid(), 1500));
             clock.Advance(999);
             server.Matchmaking.Process();
             Assert.False(ticket.WaitAsync().IsCompleted);
@@ -171,9 +171,9 @@ public class MatchmakingTests
         var server = new GameServer(Options(), clock: clock);
         try
         {
-            var first = server.Matchmaking.Join(Guid.NewGuid(), 1000);
+            var first = Execute(new JoinMatchmakingCommand(server.Matchmaking, Guid.NewGuid(), 1000));
             clock.Advance(120000);
-            var second = server.Matchmaking.Join(Guid.NewGuid(), 1001);
+            var second = Execute(new JoinMatchmakingCommand(server.Matchmaking, Guid.NewGuid(), 1001));
             server.Matchmaking.Process();
             var found = await first.WaitAsync();
             Assert.Equal(found, await second.WaitAsync());
@@ -188,8 +188,8 @@ public class MatchmakingTests
         var server = new GameServer(Options());
         try
         {
-            var duel = server.Matchmaking.Join(Guid.NewGuid(), 1000);
-            var training = server.Matchmaking.Join(Guid.NewGuid(), 1000, MatchKind.Training);
+            var duel = Execute(new JoinMatchmakingCommand(server.Matchmaking, Guid.NewGuid(), 1000));
+            var training = Execute(new JoinMatchmakingCommand(server.Matchmaking, Guid.NewGuid(), 1000, MatchKind.Training));
             server.Matchmaking.Process();
             var found = await training.WaitAsync();
             Assert.Equal(MatchKind.Training, found.Match.Kind);
@@ -209,20 +209,20 @@ public class MatchmakingTests
         try
         {
             server.CreateGame(Guid.NewGuid());
-            var first = server.Matchmaking.Join(Guid.NewGuid(), 1000);
-            var second = server.Matchmaking.Join(Guid.NewGuid(), 1100);
+            var first = Execute(new JoinMatchmakingCommand(server.Matchmaking, Guid.NewGuid(), 1000));
+            var second = Execute(new JoinMatchmakingCommand(server.Matchmaking, Guid.NewGuid(), 1100));
             server.Matchmaking.Process();
             Assert.False(first.WaitAsync().IsCompleted);
             Assert.False(second.WaitAsync().IsCompleted);
-            Assert.Equal(SearchState.Searching, server.Matchmaking.Status(first.PlayerId).State);
-            Assert.Contains("limit", server.Matchmaking.Status(first.PlayerId).Error);
+            Assert.Equal(SearchState.Searching, Execute(new GetMatchmakingStatusCommand(server.Matchmaking, first.PlayerId)).State);
+            Assert.Contains("limit", Execute(new GetMatchmakingStatusCommand(server.Matchmaking, first.PlayerId)).Error);
             clock.Advance(120000);
             server.Matchmaking.Process();
-            Assert.Equal(first.Id, server.Matchmaking.Status(first.PlayerId).SearchId);
-            Assert.Equal(second.Id, server.Matchmaking.Status(second.PlayerId).SearchId);
-            Assert.True(server.Matchmaking.Cancel(first.PlayerId, first.Id));
-            Assert.True(server.Matchmaking.Cancel(second.PlayerId, second.Id));
-            Assert.NotEqual(first.Id, server.Matchmaking.Join(first.PlayerId, 1000).Id);
+            Assert.Equal(first.Id, Execute(new GetMatchmakingStatusCommand(server.Matchmaking, first.PlayerId)).SearchId);
+            Assert.Equal(second.Id, Execute(new GetMatchmakingStatusCommand(server.Matchmaking, second.PlayerId)).SearchId);
+            Assert.True(Execute(new CancelMatchmakingCommand(server.Matchmaking, first.PlayerId, first.Id)));
+            Assert.True(Execute(new CancelMatchmakingCommand(server.Matchmaking, second.PlayerId, second.Id)));
+            Assert.NotEqual(first.Id, Execute(new JoinMatchmakingCommand(server.Matchmaking, first.PlayerId, 1000)).Id);
         }
         finally { server.Stop(); }
     }
@@ -234,13 +234,13 @@ public class MatchmakingTests
         try
         {
             var ids = Enumerable.Range(0, 40).Select(_ => Guid.NewGuid()).ToArray();
-            var tickets = await Task.WhenAll(ids.Select(id => Task.Run(() => server.Matchmaking.Join(id, 1000))));
+            var tickets = await Task.WhenAll(ids.Select(id => Task.Run(() => Execute(new JoinMatchmakingCommand(server.Matchmaking, id, 1000)))));
             await Task.WhenAll(Enumerable.Range(0, 4).Select(_ => Task.Run(server.Matchmaking.Process)));
             var found = await Task.WhenAll(tickets.Select(ticket => ticket.WaitAsync()));
             Assert.Equal(20, found.Select(item => item.Match.Id).Distinct().Count());
             var players = found.DistinctBy(item => item.Match.Id).SelectMany(item => new[] { item.Match.First.Id, item.Match.Second.Id }).ToArray();
             Assert.Equal(ids.Order(), players.Order());
-            Assert.All(ids, id => Assert.Equal(SearchState.InGame, server.Matchmaking.Status(id).State));
+            Assert.All(ids, id => Assert.Equal(SearchState.InGame, Execute(new GetMatchmakingStatusCommand(server.Matchmaking, id)).State));
         }
         finally { server.Stop(); }
     }
@@ -254,7 +254,7 @@ public class MatchmakingTests
             var id = Guid.NewGuid();
             var successes = await Task.WhenAll(Enumerable.Range(0, 32).Select(_ => Task.Run(() =>
             {
-                try { server.Matchmaking.Join(id, 1000); return true; }
+                try { Execute(new JoinMatchmakingCommand(server.Matchmaking, id, 1000)); return true; }
                 catch (InvalidOperationException) { return false; }
             })));
             Assert.Single(successes, value => value);
@@ -270,20 +270,20 @@ public class MatchmakingTests
         {
             for (var i = 0; i < 30; i++)
             {
-                var first = server.Matchmaking.Join(Guid.NewGuid(), 1000);
-                var second = server.Matchmaking.Join(Guid.NewGuid(), 1000);
-                var cancel = Task.Run(() => server.Matchmaking.Cancel(first.PlayerId, first.Id));
+                var first = Execute(new JoinMatchmakingCommand(server.Matchmaking, Guid.NewGuid(), 1000));
+                var second = Execute(new JoinMatchmakingCommand(server.Matchmaking, Guid.NewGuid(), 1000));
+                var cancel = Task.Run(() => Execute(new CancelMatchmakingCommand(server.Matchmaking, first.PlayerId, first.Id)));
                 await Task.WhenAll(cancel, Task.Run(server.Matchmaking.Process));
                 if (await cancel)
                 {
                     await Assert.ThrowsAnyAsync<OperationCanceledException>(() => first.WaitAsync());
-                    Assert.Equal(SearchState.NotSearching, server.Matchmaking.Status(first.PlayerId).State);
-                    Assert.True(server.Matchmaking.Cancel(second.PlayerId, second.Id));
+                    Assert.Equal(SearchState.NotSearching, Execute(new GetMatchmakingStatusCommand(server.Matchmaking, first.PlayerId)).State);
+                    Assert.True(Execute(new CancelMatchmakingCommand(server.Matchmaking, second.PlayerId, second.Id)));
                 }
                 else
                 {
                     Assert.Equal(await first.WaitAsync(), await second.WaitAsync());
-                    Assert.Equal(SearchState.InGame, server.Matchmaking.Status(first.PlayerId).State);
+                    Assert.Equal(SearchState.InGame, Execute(new GetMatchmakingStatusCommand(server.Matchmaking, first.PlayerId)).State);
                 }
             }
         }
@@ -297,15 +297,15 @@ public class MatchmakingTests
         var server = new GameServer(Options(), clock: clock);
         try
         {
-            var first = server.Matchmaking.Join(Guid.NewGuid(), 1000);
+            var first = Execute(new JoinMatchmakingCommand(server.Matchmaking, Guid.NewGuid(), 1000));
             clock.Advance(120000);
-            var arrival = Task.Run(() => server.Matchmaking.Join(Guid.NewGuid(), 1000));
+            var arrival = Task.Run(() => Execute(new JoinMatchmakingCommand(server.Matchmaking, Guid.NewGuid(), 1000)));
             await Task.WhenAll(arrival, Task.Run(server.Matchmaking.Process), Task.Run(server.Matchmaking.Process));
             var match = await first.WaitAsync();
             var second = await arrival;
-            if (match.Match.Second.IsBot) Assert.Equal(SearchState.Searching, server.Matchmaking.Status(second.PlayerId).State);
+            if (match.Match.Second.IsBot) Assert.Equal(SearchState.Searching, Execute(new GetMatchmakingStatusCommand(server.Matchmaking, second.PlayerId)).State);
             else Assert.Equal(match, await second.WaitAsync());
-            Assert.Equal(match, server.Matchmaking.Status(first.PlayerId).Match);
+            Assert.Equal(match, Execute(new GetMatchmakingStatusCommand(server.Matchmaking, first.PlayerId)).Match);
         }
         finally { server.Stop(); }
     }
@@ -317,12 +317,12 @@ public class MatchmakingTests
         using var stop = new CancellationTokenSource();
         try
         {
-            var ticket = server.Matchmaking.Join(Guid.NewGuid(), 1000);
+            var ticket = Execute(new JoinMatchmakingCommand(server.Matchmaking, Guid.NewGuid(), 1000));
             var waiting = ticket.WaitAsync(stop.Token);
             stop.Cancel();
             await Assert.ThrowsAnyAsync<OperationCanceledException>(() => waiting);
-            Assert.Equal(SearchState.Searching, server.Matchmaking.Status(ticket.PlayerId).State);
-            server.Matchmaking.Join(Guid.NewGuid(), 1000);
+            Assert.Equal(SearchState.Searching, Execute(new GetMatchmakingStatusCommand(server.Matchmaking, ticket.PlayerId)).State);
+            Execute(new JoinMatchmakingCommand(server.Matchmaking, Guid.NewGuid(), 1000));
             server.Matchmaking.Process();
             Assert.NotNull(await ticket.WaitAsync());
         }
@@ -335,8 +335,8 @@ public class MatchmakingTests
         var server = new GameServer(Options());
         try
         {
-            var first = server.Matchmaking.Join(Guid.NewGuid(), 1000);
-            var second = server.Matchmaking.Join(Guid.NewGuid(), 1000);
+            var first = Execute(new JoinMatchmakingCommand(server.Matchmaking, Guid.NewGuid(), 1000));
+            var second = Execute(new JoinMatchmakingCommand(server.Matchmaking, Guid.NewGuid(), 1000));
             server.Matchmaking.Process();
             var found = await first.WaitAsync();
             var id = found.Match.Id;
@@ -346,12 +346,12 @@ public class MatchmakingTests
             server.Matchmaking.Process();
             var final = await server.SnapshotAsync(id);
             Assert.True(final.Finished);
-            var outcome = server.Matchmaking.Outcome(id);
+            var outcome = Execute(new GetMatchOutcomeCommand(server.Matchmaking, id));
             Assert.Equal(first.PlayerId, outcome!.WinnerId);
             server.Matchmaking.Process();
-            Assert.Same(outcome, server.Matchmaking.Outcome(id));
-            Assert.Equal(SearchState.NotSearching, server.Matchmaking.Status(second.PlayerId).State);
-            Assert.NotEqual(first.Id, server.Matchmaking.Join(first.PlayerId, 1000).Id);
+            Assert.Same(outcome, Execute(new GetMatchOutcomeCommand(server.Matchmaking, id)));
+            Assert.Equal(SearchState.NotSearching, Execute(new GetMatchmakingStatusCommand(server.Matchmaking, second.PlayerId)).State);
+            Assert.NotEqual(first.Id, Execute(new JoinMatchmakingCommand(server.Matchmaking, first.PlayerId, 1000)).Id);
         }
         finally { server.Stop(); }
     }
@@ -363,8 +363,8 @@ public class MatchmakingTests
         var restored = new GameServer(Options());
         try
         {
-            var a = server.Matchmaking.Join(Guid.NewGuid(), 1000, MatchKind.Training);
-            var b = server.Matchmaking.Join(Guid.NewGuid(), 1000, MatchKind.Training);
+            var a = Execute(new JoinMatchmakingCommand(server.Matchmaking, Guid.NewGuid(), 1000, MatchKind.Training));
+            var b = Execute(new JoinMatchmakingCommand(server.Matchmaking, Guid.NewGuid(), 1000, MatchKind.Training));
             server.Matchmaking.Process();
             var first = await a.WaitAsync();
             var second = await b.WaitAsync();
@@ -378,7 +378,7 @@ public class MatchmakingTests
             Assert.DoesNotContain(other.Objects, item => item.Id == first.Match.First.ShipId);
             var saved = JsonSerializer.Deserialize<WorldSnapshot>(JsonSerializer.Serialize(snapshot))!;
             restored.CreateWorld(saved);
-            Assert.Throws<InvalidOperationException>(() => restored.Matchmaking.Join(a.PlayerId, 1000));
+            Assert.Throws<InvalidOperationException>(() => Execute(new JoinMatchmakingCommand(restored.Matchmaking, a.PlayerId, 1000)));
             restored.Start();
             Assert.Equal(first.Match, (await restored.SnapshotAsync(first.Match.Id)).Match);
         }
@@ -389,13 +389,13 @@ public class MatchmakingTests
     public async Task StoppingCancelsWaitingTicketsAndRejectsNewSearches()
     {
         var server = new GameServer(Options());
-        var ticket = server.Matchmaking.Join(Guid.NewGuid(), 1000);
+        var ticket = Execute(new JoinMatchmakingCommand(server.Matchmaking, Guid.NewGuid(), 1000));
         server.Start();
         await server.Matchmaking.StopAsync();
         server.Stop();
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => ticket.WaitAsync());
-        Assert.Throws<InvalidOperationException>(() => server.Matchmaking.Join(Guid.NewGuid(), 1000));
-        Assert.Equal(SearchState.NotSearching, server.Matchmaking.Status(ticket.PlayerId).State);
+        Assert.Throws<InvalidOperationException>(() => Execute(new JoinMatchmakingCommand(server.Matchmaking, Guid.NewGuid(), 1000)));
+        Assert.Equal(SearchState.NotSearching, Execute(new GetMatchmakingStatusCommand(server.Matchmaking, ticket.PlayerId)).State);
     }
 
     [Fact]
@@ -408,8 +408,8 @@ public class MatchmakingTests
         });
         try
         {
-            var a = server.Matchmaking.Join(Guid.NewGuid(), 1000, MatchKind.Training);
-            var b = server.Matchmaking.Join(Guid.NewGuid(), 1000, MatchKind.Training);
+            var a = Execute(new JoinMatchmakingCommand(server.Matchmaking, Guid.NewGuid(), 1000, MatchKind.Training));
+            var b = Execute(new JoinMatchmakingCommand(server.Matchmaking, Guid.NewGuid(), 1000, MatchKind.Training));
             server.Matchmaking.Process();
             var first = await a.WaitAsync();
             var second = await b.WaitAsync();
@@ -434,15 +434,15 @@ public class MatchmakingTests
         var server = new GameServer(Options(new MatchmakingOptions { QueueCapacity = 1, TrainingEnabled = false }));
         try
         {
-            Assert.Throws<ArgumentException>(() => server.Matchmaking.Join(Guid.Empty, 1000));
-            Assert.Throws<ArgumentException>(() => server.Matchmaking.Join(Guid.NewGuid(), -1));
-            Assert.Throws<ArgumentException>(() => server.Matchmaking.Join(Guid.NewGuid(), 5001));
-            Assert.Throws<ArgumentException>(() => server.Matchmaking.Join(Guid.NewGuid(), 1000, (MatchKind)42));
-            Assert.Throws<InvalidOperationException>(() => server.Matchmaking.Join(Guid.NewGuid(), 1000, MatchKind.Training));
-            var first = server.Matchmaking.Join(Guid.NewGuid(), 0);
-            Assert.Throws<InvalidOperationException>(() => server.Matchmaking.Join(Guid.NewGuid(), 5000));
-            server.Matchmaking.Cancel(first.PlayerId, first.Id);
-            Assert.NotNull(server.Matchmaking.Join(Guid.NewGuid(), 5000));
+            Assert.Throws<ArgumentException>(() => Execute(new JoinMatchmakingCommand(server.Matchmaking, Guid.Empty, 1000)));
+            Assert.Throws<ArgumentException>(() => Execute(new JoinMatchmakingCommand(server.Matchmaking, Guid.NewGuid(), -1)));
+            Assert.Throws<ArgumentException>(() => Execute(new JoinMatchmakingCommand(server.Matchmaking, Guid.NewGuid(), 5001)));
+            Assert.Throws<ArgumentException>(() => Execute(new JoinMatchmakingCommand(server.Matchmaking, Guid.NewGuid(), 1000, (MatchKind)42)));
+            Assert.Throws<InvalidOperationException>(() => Execute(new JoinMatchmakingCommand(server.Matchmaking, Guid.NewGuid(), 1000, MatchKind.Training)));
+            var first = Execute(new JoinMatchmakingCommand(server.Matchmaking, Guid.NewGuid(), 0));
+            Assert.Throws<InvalidOperationException>(() => Execute(new JoinMatchmakingCommand(server.Matchmaking, Guid.NewGuid(), 5000)));
+            Execute(new CancelMatchmakingCommand(server.Matchmaking, first.PlayerId, first.Id));
+            Assert.NotNull(Execute(new JoinMatchmakingCommand(server.Matchmaking, Guid.NewGuid(), 5000)));
         }
         finally { server.Stop(); }
     }
@@ -458,6 +458,36 @@ public class MatchmakingTests
     [InlineData("{\"Matchmaking\":{\"MaxRating\":-1}}")]
     [InlineData("{\"Matchmaking\":{\"SpawnDistance\":0}}")]
     public void InvalidConfigurationIsRejected(string json) => Assert.Throws<ArgumentException>(() => ServerOptions.FromJson(json));
+
+    private static SearchTicket Execute(JoinMatchmakingCommand command)
+    {
+        command.Execute();
+        return command.Result;
+    }
+
+    private static bool Execute(CancelMatchmakingCommand command)
+    {
+        command.Execute();
+        return command.Result;
+    }
+
+    private static SearchStatus Execute(GetMatchmakingStatusCommand command)
+    {
+        command.Execute();
+        return command.Result;
+    }
+
+    private static Task<MatchFound> Execute(WaitForMatchCommand command)
+    {
+        command.Execute();
+        return command.Result;
+    }
+
+    private static MatchOutcome? Execute(GetMatchOutcomeCommand command)
+    {
+        command.Execute();
+        return command.Result;
+    }
 
     private static void Send(GameServer server, Guid id, WorldOrder order) => Assert.Equal(DispatchResult.Accepted,
         server.CreateGameplayEndpoint().Accept(new GameMessage(id, "World", JsonSerializer.SerializeToElement(order))));
