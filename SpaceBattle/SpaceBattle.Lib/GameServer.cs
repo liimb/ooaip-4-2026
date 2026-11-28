@@ -26,10 +26,12 @@ public class GameServer
         _clock = clock ?? TimeProvider.System;
         _pool = new WorkerPool(options.Workers);
         _schedulers = _pool.Workers.Select(worker => new GameScheduler(worker)).ToArray();
+        Matchmaking = new Matchmaker(this, options.Matchmaking, _clock);
     }
 
     public Dispatcher Dispatcher { get; } = new();
     public int WorkerCount => _pool.Workers.Count;
+    public Matchmaker Matchmaking { get; }
 
     public Game CreateGame(Guid gameId, Action<GameScope>? configure = null)
     {
@@ -67,12 +69,14 @@ public class GameServer
             if (_stopped) throw new InvalidOperationException("Server is stopped.");
             _pool.Start();
         }
+        Matchmaking.Start();
     }
 
     public void Stop()
     {
         if (_pool.Workers.Any(worker => worker.IsCurrentThread))
             throw new InvalidOperationException("Stop the server from its controlling thread.");
+        Matchmaking.Stop();
         Game[] games;
         lock (_lifecycle)
         {
@@ -92,19 +96,50 @@ public class GameServer
 
     public Game CreateWorld(WorldSnapshot snapshot)
     {
+        ArgumentNullException.ThrowIfNull(snapshot);
+        return snapshot.Match != null ? Matchmaking.Restore(snapshot) : CreateWorldCore(snapshot, null);
+    }
+
+    internal MatchSession CreateMatch(MatchDefinition definition)
+    {
+        var rules = _options.Matchmaking;
+        var snapshot = new WorldSnapshot(1, definition.Id, 0, false, new[]
+        {
+            new ObjectState(definition.First.ShipId, "Ship", 0, 0, Fuel: rules.InitialShipFuel, Rockets: rules.InitialShipRockets, Owner: definition.First.Id),
+            new ObjectState(definition.Second.ShipId, "Ship", rules.SpawnDistance, 0, Direction: 4, Fuel: rules.InitialShipFuel, Rockets: rules.InitialShipRockets, Owner: definition.Second.Id)
+        }, definition);
+        return RestoreMatch(snapshot);
+    }
+
+    internal MatchSession RestoreMatch(WorldSnapshot snapshot)
+    {
+        MatchSession? session = null;
+        var game = CreateWorldCore(snapshot, (scope, world) =>
+        {
+            session = new MatchSession(snapshot, world, _options.Gameplay);
+            scope.Register("Match.Definition", _ => snapshot.Match!);
+        });
+        session!.Game = game;
+        return session;
+    }
+
+    private Game CreateWorldCore(WorldSnapshot snapshot, Action<GameScope, GameWorld>? configure)
+    {
         GameWorld.Validate(snapshot);
         if (snapshot.Objects.Length > _options.Gameplay.MaxObjects || snapshot.Objects.Any(item => item.Fuel > _options.Gameplay.MaxFuel))
             throw new ArgumentException("Snapshot exceeds configured limits.");
         lock (_lifecycle)
         {
+            GameWorld? world = null;
             var game = CreateGame(snapshot.GameId, scope =>
             {
-                var world = new GameWorld(snapshot, _options.Gameplay, () => _games[snapshot.GameId].AssertContext());
+                world = new GameWorld(snapshot, _options.Gameplay, () => _games[snapshot.GameId].AssertContext());
                 scope.Register("World.Command", args => world.Command((WorldOrder)args[0]));
                 scope.Register("Game.Operations.Shooting", args => world.Shooting((IShootable)args[0]));
                 scope.Register("Game.Registry.Get", args => world.MovingObject((Guid)args[0]));
-                _worlds[snapshot.GameId] = world;
+                configure?.Invoke(scope, world);
             });
+            _worlds[snapshot.GameId] = world!;
             return game;
         }
     }
@@ -133,6 +168,7 @@ public class GameServer
 
     public void Freeze()
     {
+        Matchmaking.Stop();
         lock (_lifecycle)
         {
             _stopped = true;

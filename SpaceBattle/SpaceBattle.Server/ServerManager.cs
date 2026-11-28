@@ -46,8 +46,13 @@ public class ServerManager
                 ? await _store.LoadAsync(token) : _initial;
             foreach (var snapshot in snapshots) server.CreateWorld(snapshot);
             host = ServerApplication.Create(_options, server.CreateGameplayEndpoint());
+
+            WebRegistrator.Register(host, server.Matchmaking);
+
             server.Start();
+
             await host.StartAsync(token);
+
             _host = host;
             _server = server;
             _shutdown = null;
@@ -85,6 +90,7 @@ public class ServerManager
     {
         _state = ServerState.Stopping;
         var server = Server;
+        await server.Matchmaking.StopAsync();
         server.Freeze();
         try
         {
