@@ -45,10 +45,14 @@ public class ServerManager
             var snapshots = _options.Lifecycle.RestoreOnStart && File.Exists(_options.Lifecycle.SnapshotPath)
                 ? await _store.LoadAsync(token) : _initial;
             foreach (var snapshot in snapshots) server.CreateWorld(snapshot);
-            host = ServerApplication.Create(_options, server.CreateGameplayEndpoint());
-            new MatchmakingEndpoints(host, server.Matchmaking).Map();
+            host = ServerApplication.Create( _options, server.CreateGameplayEndpoint());
+
+            WebRegistrator.Register(host, server.Matchmaking);
+
             server.Start();
+
             await host.StartAsync(token);
+
             _host = host;
             _server = server;
             _shutdown = null;
