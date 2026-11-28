@@ -46,6 +46,7 @@ public class ServerManager
                 ? await _store.LoadAsync(token) : _initial;
             foreach (var snapshot in snapshots) server.CreateWorld(snapshot);
             host = ServerApplication.Create(_options, server.CreateGameplayEndpoint());
+            new MatchmakingEndpoints(host, server.Matchmaking).Map();
             server.Start();
             await host.StartAsync(token);
             _host = host;
